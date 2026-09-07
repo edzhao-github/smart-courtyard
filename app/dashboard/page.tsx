@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import {
   Map,
   ArrowUpRight,
@@ -147,6 +146,9 @@ export default function Dashboard() {
     [pipeMode, setPipeMode] = useState<null | 'water' | 'power'>(null),
     [pipePoints, setPipePoints] = useState<{ x: number; y: number }[]>([]),
     [pipeName, setPipeName] = useState(''),
+    [pipeCursor, setPipeCursor] = useState<{ x: number; y: number } | null>(
+      null,
+    ),
     [pipeFilter, setPipeFilter] = useState('all');
   const snapshot = useRef({ plan, ops });
   snapshot.current = { plan, ops };
@@ -526,9 +528,9 @@ export default function Dashboard() {
           <a className="current" href="/dashboard">
             管理驾驶舱
           </a>
-          <Link href="/">
+          <a href="/">
             图纸编辑器 <ArrowUpRight size={14} />
-          </Link>
+          </a>
         </nav>
         <div className="manager-head-actions">
           <button onClick={() => file.current?.click()}>
@@ -719,57 +721,6 @@ export default function Dashboard() {
                     ['power', '供电管线'],
                   ]}
                 />
-                {!pipeMode ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setPipeMode('water');
-                        setPipePoints([]);
-                        setPipeName('');
-                      }}
-                    >
-                      <Droplets size={14} />
-                      标注水管
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPipeMode('power');
-                        setPipePoints([]);
-                        setPipeName('');
-                      }}
-                    >
-                      <Zap size={14} />
-                      标注电线
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      aria-label="管线名称"
-                      placeholder="管线名称"
-                      value={pipeName}
-                      maxLength={120}
-                      onChange={(e) => setPipeName(e.target.value)}
-                    />
-                    <button disabled={pipePoints.length < 2} onClick={savePipe}>
-                      完成
-                    </button>
-                    <button
-                      onClick={() => setPipePoints((p) => p.slice(0, -1))}
-                      aria-label="撤销节点"
-                    >
-                      <Undo2 size={14} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPipeMode(null);
-                        setPipePoints([]);
-                      }}
-                    >
-                      取消
-                    </button>
-                  </>
-                )}
               </div>
             )}
             <div className="manager-map-canvas">
@@ -779,8 +730,8 @@ export default function Dashboard() {
                 aria-label="园区经营分布地图"
                 style={{ cursor: pipeMode ? 'crosshair' : 'grab' }}
                 onPointerDown={(e) => {
-                  if (e.button !== 0) return;
-                  if (pipeMode) {
+                  if (e.button !== 0 && e.button !== 1) return;
+                  if (pipeMode && e.button === 0) {
                     const r = e.currentTarget.getBoundingClientRect();
                     setPipePoints((p) => [
                       ...p,
@@ -801,9 +752,17 @@ export default function Dashboard() {
                   const id = (e.target as Element)
                     .closest('[data-space]')
                     ?.getAttribute('data-space');
-                  if (id) setSelected(id);
+                  if (id && !pipeMode) setSelected(id);
                 }}
+                onPointerLeave={() => setPipeCursor(null)}
                 onPointerMove={(e) => {
+                  if (pipeMode) {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setPipeCursor({
+                      x: origin.x + (e.clientX - r.left) / scale,
+                      y: origin.y + (e.clientY - r.top) / scale,
+                    });
+                  }
                   const d = drag.current;
                   if (!d) return;
                   if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3)
@@ -885,11 +844,13 @@ export default function Dashboard() {
                     <g
                       key={e.id}
                       data-space={e.id}
+                      className="map-building"
+                      aria-pressed={selected === e.id}
                       tabIndex={0}
                       role="button"
                       aria-label={`${e.name}，${subtitle}`}
                       onKeyDown={(ev) => {
-                        if (ev.key === 'Enter') {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
                           setSelected(e.id);
                           ev.preventDefault();
                         }
@@ -903,8 +864,28 @@ export default function Dashboard() {
                         height={e.height}
                         rx={0.25}
                         fill={color(e)}
-                        stroke={selected === e.id ? '#102f4a' : '#fff'}
-                        strokeWidth={(selected === e.id ? 3 : 1.1) / scale}
+                        stroke="#fff"
+                        strokeWidth={1.1 / scale}
+                      />
+                      <rect
+                        className="building-selection-halo"
+                        width={e.width}
+                        height={e.height}
+                        rx={0.25}
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth={3.5 / scale}
+                        pointerEvents="none"
+                      />
+                      <rect
+                        className="building-selection-edge"
+                        width={e.width}
+                        height={e.height}
+                        rx={0.25}
+                        fill="none"
+                        stroke="#34434a"
+                        strokeWidth={1.25 / scale}
+                        pointerEvents="none"
                       />
                       <svg
                         x={l.padding}
@@ -973,12 +954,38 @@ export default function Dashboard() {
                     </g>
                   ))}
                 {pipeMode && (
-                  <polyline
-                    points={pipePoints.map((pt) => `${pt.x},${pt.y}`).join(' ')}
-                    fill="none"
-                    stroke={pipeMode === 'water' ? '#087cc5' : '#f18d22'}
-                    strokeWidth={3 / scale}
-                  />
+                  <g pointerEvents="none">
+                    <polyline
+                      points={pipePoints
+                        .map((pt) => `${pt.x},${pt.y}`)
+                        .join(' ')}
+                      fill="none"
+                      stroke={pipeMode === 'water' ? '#087cc5' : '#f18d22'}
+                      strokeWidth={3 / scale}
+                    />
+                    {pipePoints.length > 0 && pipeCursor && (
+                      <line
+                        x1={pipePoints[pipePoints.length - 1].x}
+                        y1={pipePoints[pipePoints.length - 1].y}
+                        x2={pipeCursor.x}
+                        y2={pipeCursor.y}
+                        stroke={pipeMode === 'water' ? '#087cc5' : '#f18d22'}
+                        strokeWidth={2 / scale}
+                        strokeDasharray={`${5 / scale} ${4 / scale}`}
+                      />
+                    )}
+                    {pipePoints.map((pt, i) => (
+                      <circle
+                        key={i}
+                        cx={pt.x}
+                        cy={pt.y}
+                        r={4 / scale}
+                        fill={pipeMode === 'water' ? '#087cc5' : '#f18d22'}
+                        stroke="white"
+                        strokeWidth={1.5 / scale}
+                      />
+                    ))}
+                  </g>
                 )}
               </svg>
               {!spaces.length && (
@@ -989,12 +996,17 @@ export default function Dashboard() {
                   <button onClick={() => file.current?.click()}>
                     导入图纸
                   </button>
-                  <Link href="/">打开绘图工具</Link>
+                  <a href="/">打开绘图工具</a>
                 </div>
               )}
               {pipeMode && (
                 <div className="map-instruction">
-                  依次点击管线节点 · {pipePoints.length} 个节点 · 完成后保存
+                  正在绘制
+                  {pipeMode === 'water'
+                    ? '供水线路（蓝色）'
+                    : '供电线路（橙色）'}{' '}
+                  · 点击起点和转折点 · 已放置 {pipePoints.length} 个节点 ·
+                  点击「保存线路」完成 · 按住鼠标中键平移
                 </div>
               )}
               <div className="manager-map-controls">
@@ -1387,7 +1399,7 @@ export default function Dashboard() {
           ) : (
             <section className="pipe-list">
               <p>
-                管线在「水电管线」视图中依次点击节点绘制；接入状态来自图纸属性，两者独立维护。
+                管线在「图纸编辑器」中绘制；接入状态来自图纸属性，两者独立维护。
               </p>
               {ops.pipes.map((p) => (
                 <div key={p.id}>
@@ -1399,21 +1411,6 @@ export default function Dashboard() {
                     )}{' '}
                     {p.name} · {p.points.length} 个节点
                   </span>
-                  <button
-                    className="danger"
-                    onClick={() => {
-                      if (
-                        persist({
-                          ...ops,
-                          pipes: ops.pipes.filter((x) => x.id !== p.id),
-                        })
-                      )
-                        setNotice('管线已删除');
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    删除
-                  </button>
                 </div>
               ))}
               {!ops.pipes.length && (

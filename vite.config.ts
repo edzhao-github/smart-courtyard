@@ -35,6 +35,14 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  // Standalone local mode: no hosted Sites middleware or Cloudflare runtime.
+  if (process.env.COURTYARD_LOCAL === '1') {
+    return {
+      css: { postcss: { plugins: [tailwindcss()] } },
+      server: { host: 'localhost', port: 3000, strictPort: true },
+      plugins: [vinext()],
+    };
+  }
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';

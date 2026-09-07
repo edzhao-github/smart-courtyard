@@ -572,3 +572,32 @@ label.field textarea {
     display: none;
   }
 }
+
+.editor-pipe-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.editor-pipe-tools p {
+  line-height: 1.6;
+  color: #617782;
+  margin: 0;
+}
+.editor-pipe-tools input {
+  min-width: 0;
+  width: 100%;
+  padding: 7px;
+  border: 1px solid #cfdce1;
+  border-radius: 5px;
+}
+.editor-pipe-tools > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.editor-pipe-tools > div span {
+  overflow-wrap: anywhere;
+}

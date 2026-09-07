@@ -296,6 +296,19 @@
   font-family: Arial, 'PingFang SC', sans-serif;
   user-select: none;
 }
+.manager-map-canvas .map-building:focus {
+  outline: none;
+}
+.building-selection-halo,
+.building-selection-edge {
+  opacity: 0;
+}
+.map-building[aria-pressed='true'] > .building-selection-halo,
+.map-building[aria-pressed='true'] > .building-selection-edge,
+.map-building:focus-visible > .building-selection-halo,
+.map-building:focus-visible > .building-selection-edge {
+  opacity: 1;
+}
 .manager-map-controls {
   position: absolute;
   bottom: 15px;
@@ -785,6 +798,10 @@
   font-size: 13px;
 }
 .map-instruction {
+  pointer-events: none;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  line-height: 1.6;
   position: absolute;
   top: 10px;
   left: 50%;

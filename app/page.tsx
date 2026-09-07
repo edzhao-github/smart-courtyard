@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { flushSync } from 'react-dom';
 import {
   MousePointer2,
@@ -26,6 +25,12 @@ import {
   Zap,
   RotateCw,
 } from 'lucide-react';
+import {
+  OPS_KEY,
+  emptyOperations,
+  validateOperations,
+  type Pipe,
+} from '@/lib/operations';
 import { layoutLabel } from '@/lib/label-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -60,6 +65,8 @@ const toolDefs = [
   { id: 'gate', name: '园区大门', icon: DoorOpen },
   { id: 'parking', name: '停车场', icon: ParkingSquare },
   { id: 'charger', name: '充电桩', icon: Zap },
+  { id: 'water-pipe', name: '供水线路', icon: Minus },
+  { id: 'power-pipe', name: '供电线路', icon: Zap },
   { id: 'pan', name: '平移画布', icon: Hand },
 ];
 type Point = { x: number; y: number };
@@ -90,6 +97,10 @@ function download(name: string, body: string, type: string) {
 }
 export default function Home() {
   const [plan, setPlan] = useState<Plan>(blank),
+    [pipes, setPipes] = useState<Pipe[]>([]),
+    [pipePoints, setPipePoints] = useState<Point[]>([]),
+    [pipeCursor, setPipeCursor] = useState<Point | null>(null),
+    [pipeName, setPipeName] = useState(''),
     [ready, setReady] = useState(false),
     [tool, setTool] = useState('select'),
     [spaceHeld, setSpaceHeld] = useState(false),
@@ -185,10 +196,12 @@ export default function Home() {
     try {
       const s = localStorage.getItem(KEY);
       if (s) setPlan(validatePlan(JSON.parse(s)));
+      setReady(true);
     } catch {
-      setSaved('本地草稿无法读取，请导入备份');
+      setSaved(
+        '草稿读取失败，已停止自动保存以保留原数据。请先导出原始数据或导入备份',
+      );
     }
-    setReady(true);
   }, []);
   useEffect(() => {
     if (!ready) return;
@@ -253,7 +266,66 @@ export default function Home() {
         ),
       });
   }
+  useEffect(() => {
+    try {
+      setPipes(
+        validateOperations(
+          JSON.parse(
+            localStorage.getItem(OPS_KEY) || JSON.stringify(emptyOperations),
+          ),
+        ).pipes,
+      );
+    } catch {
+      setNotice('线路读取失败，请先检查运营备份');
+    }
+    if (new URLSearchParams(location.search).get('tool') === 'utilities')
+      setTool('water-pipe');
+  }, []);
+  function writePipes(update: (current: Pipe[]) => Pipe[]) {
+    try {
+      const current = validateOperations(
+        JSON.parse(
+          localStorage.getItem(OPS_KEY) || JSON.stringify(emptyOperations),
+        ),
+      );
+      const next = validateOperations({
+        ...current,
+        pipes: update(current.pipes),
+      });
+      localStorage.setItem(OPS_KEY, JSON.stringify(next));
+      setPipes(next.pipes);
+      return true;
+    } catch {
+      setNotice('线路保存失败，原始台账已保留');
+      return false;
+    }
+  }
+  function finishPipe() {
+    if (pipePoints.length < 2) return;
+    if (
+      writePipes((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          kind: tool === 'water-pipe' ? 'water' : 'power',
+          name:
+            pipeName.trim() ||
+            `${tool === 'water-pipe' ? '供水' : '供电'}线路 ${current.length + 1}`,
+          points: pipePoints,
+          notes: '手动绘制路线',
+        },
+      ])
+    ) {
+      setPipePoints([]);
+      setPipeCursor(null);
+      setPipeName('');
+      setNotice('线路已保存，驾驶舱可查看');
+    }
+  }
   function cancel() {
+    setPipePoints([]);
+    setPipeCursor(null);
+
     setPickingTarget(null);
     setDraft(null);
     setGesture(null);
@@ -432,6 +504,10 @@ export default function Home() {
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
+    if (tool === 'water-pipe' || tool === 'power-pipe') {
+      setPipePoints((points) => [...points, p]);
+      return;
+    }
     if (tool === 'select') {
       setSelected(found?.id || null);
       if (found) {
@@ -486,6 +562,10 @@ export default function Home() {
       return;
     }
     const p = point(e);
+    if (tool === 'water-pipe' || tool === 'power-pipe') {
+      setPipeCursor(p);
+      return;
+    }
     if (lineStart) {
       let end = p;
       if (e.shiftKey)
@@ -622,7 +702,18 @@ export default function Home() {
   function exportJSON() {
     download(
       `${plan.name}.json`,
-      JSON.stringify(plan, null, 2),
+      JSON.stringify(
+        {
+          plan,
+          operations: validateOperations(
+            JSON.parse(
+              localStorage.getItem(OPS_KEY) || JSON.stringify(emptyOperations),
+            ),
+          ),
+        },
+        null,
+        2,
+      ),
       'application/json',
     );
     setNotice('图纸数据已导出，包含全部空间属性');
@@ -644,8 +735,26 @@ export default function Home() {
   async function importFile(f: File) {
     try {
       if (f.size > 10 * 1024 * 1024) throw Error('文件不能超过 10MB');
-      const next = validatePlan(JSON.parse(await f.text()));
+      const imported = JSON.parse(await f.text());
+      const next = validatePlan(imported.plan || imported);
+      const importedOps = imported.operations
+        ? validateOperations(imported.operations)
+        : null;
+      if (importedOps) {
+        const oldOps = localStorage.getItem(OPS_KEY);
+        if (oldOps)
+          localStorage.setItem(
+            `${OPS_KEY}-before-import-${Date.now()}`,
+            oldOps,
+          );
+        localStorage.setItem(OPS_KEY, JSON.stringify(importedOps));
+        setPipes(importedOps.pipes);
+      }
+      const existing = localStorage.getItem(KEY);
+      if (existing)
+        localStorage.setItem(`${KEY}-before-import-${Date.now()}`, existing);
       commit(next);
+      setReady(true);
       cancel();
       setSelected(null);
       fit(next.elements);
@@ -912,7 +1021,7 @@ export default function Home() {
           </b>
           <span className="divider" />
           <span>园区绘图工作台</span>
-          <Link
+          <a
             href="/dashboard"
             style={{
               fontSize: 14,
@@ -922,7 +1031,7 @@ export default function Home() {
             }}
           >
             管理驾驶舱 ↗
-          </Link>
+          </a>
         </div>
         <div className="actions">
           <button onClick={() => file.current?.click()}>
@@ -1035,6 +1144,56 @@ export default function Home() {
                 <t.icon size={19} />
                 {t.name}
               </button>
+            ))}
+          </div>
+          {(tool === 'water-pipe' || tool === 'power-pipe') && (
+            <div className="editor-pipe-tools">
+              <strong>
+                {tool === 'water-pipe' ? '蓝色 · 供水线路' : '橙色 · 供电线路'}
+              </strong>
+              <p>依次点击起点、转折点和终点；空格拖动平移。</p>
+              <input
+                aria-label="线路名称"
+                placeholder="线路名称（选填）"
+                maxLength={120}
+                value={pipeName}
+                onChange={(e) => setPipeName(e.target.value)}
+              />
+              <span>已放置 {pipePoints.length} 个节点</span>
+              <button disabled={pipePoints.length < 2} onClick={finishPipe}>
+                保存线路
+              </button>
+              <button
+                disabled={!pipePoints.length}
+                onClick={() => setPipePoints((p) => p.slice(0, -1))}
+              >
+                撤销节点
+              </button>
+              <button onClick={cancel}>取消本次绘制</button>
+            </div>
+          )}
+          <h2>
+            水电线路 <span>{pipes.length}</span>
+          </h2>
+          <div className="editor-pipe-tools">
+            {pipes.map((p) => (
+              <div key={p.id}>
+                <span
+                  style={{ color: p.kind === 'water' ? '#087cc5' : '#b96710' }}
+                >
+                  {p.kind === 'water' ? '水' : '电'} · {p.name}
+                </span>
+                <button
+                  aria-label={`删除线路 ${p.name}`}
+                  onClick={() =>
+                    writePipes((current) =>
+                      current.filter((x) => x.id !== p.id),
+                    )
+                  }
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             ))}
           </div>
           <h2>
@@ -1158,6 +1317,41 @@ export default function Home() {
             />
             {plan.elements.map((e) =>
               renderShape(draft?.id === e.id ? draft : e),
+            )}
+            {pipes.map((p) => (
+              <polyline
+                key={p.id}
+                points={p.points.map((pt) => `${pt.x},${pt.y}`).join(' ')}
+                fill="none"
+                stroke={p.kind === 'water' ? '#087cc5' : '#f18d22'}
+                strokeWidth={3 / scale}
+                pointerEvents="none"
+              >
+                <title>{p.name}</title>
+              </polyline>
+            ))}
+            {pipePoints.length > 0 && (
+              <g data-editor="true" pointerEvents="none">
+                <polyline
+                  points={[...pipePoints, ...(pipeCursor ? [pipeCursor] : [])]
+                    .map((pt) => `${pt.x},${pt.y}`)
+                    .join(' ')}
+                  fill="none"
+                  stroke={tool === 'water-pipe' ? '#087cc5' : '#f18d22'}
+                  strokeWidth={2 / scale}
+                />
+                {pipePoints.map((pt, i) => (
+                  <circle
+                    key={i}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={4 / scale}
+                    fill="white"
+                    stroke={tool === 'water-pipe' ? '#087cc5' : '#f18d22'}
+                    strokeWidth={2 / scale}
+                  />
+                ))}
+              </g>
             )}
             {draft &&
               !plan.elements.some((e) => e.id === draft.id) &&
