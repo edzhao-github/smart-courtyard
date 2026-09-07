@@ -18,6 +18,7 @@ import {
   Move,
   Save,
   Copy,
+  ClipboardPaste,
   Trash2,
   Hand,
   ParkingSquare,
@@ -81,6 +82,7 @@ export default function Home() {
     [ready, setReady] = useState(false),
     [tool, setTool] = useState('select'),
     [spaceHeld, setSpaceHeld] = useState(false),
+    [clipboard, setClipboard] = useState<Space | null>(null),
     [snapTarget, setSnapTarget] = useState(''),
     [snapSide, setSnapSide] = useState<SnapSide>('auto'),
     [snapAlignment, setSnapAlignment] = useState<SnapAlignment>('start'),
@@ -99,7 +101,8 @@ export default function Home() {
     [size, setSize] = useState({ w: 900, h: 600 });
   const svg = useRef<SVGSVGElement>(null),
     file = useRef<HTMLInputElement>(null),
-    current = useRef(plan);
+    current = useRef(plan),
+    pasteCount = useRef(0);
   current.current = plan;
   useEffect(() => {
     const context = (
@@ -274,6 +277,9 @@ export default function Home() {
         setSpaceHeld(true);
       }
       if (e.key === 'Escape') cancel();
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'c' && item) { e.preventDefault(); copy(); }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'v' && clipboard) { e.preventDefault(); paste(); }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'd' && item) { e.preventDefault(); duplicate(); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -591,6 +597,22 @@ export default function Home() {
   }
   function copy() {
     if (!item) return;
+    setClipboard(structuredClone(item));
+    pasteCount.current = 0;
+    setNotice(`已复制 ${item.name}，按 Ctrl/Cmd+V 粘贴`);
+  }
+  function paste() {
+    if (!clipboard) return;
+    pasteCount.current += 1;
+    const offset = pasteCount.current * 2;
+    const next = {...structuredClone(clipboard), id: crypto.randomUUID(), name: `${clipboard.name} 副本 ${pasteCount.current}`, x: clipboard.x + offset, y: clipboard.y + offset};
+    cancel(); setTool('select');
+    commit({...plan,elements:[...plan.elements,next]});
+    setSelected(next.id);
+    setNotice('已粘贴，可拖动副本或使用吸附功能对齐');
+  }
+  function duplicate() {
+    if (!item) return;
     const next = {
       ...item,
       id: crypto.randomUUID(),
@@ -819,6 +841,8 @@ export default function Home() {
           </h1>
         </div>
         <div className="actions">
+          <button onClick={copy} disabled={!item} title="复制选中区域 Ctrl/Cmd+C"><Copy size={16}/>复制</button>
+          <button onClick={paste} disabled={!clipboard} title="粘贴区域 Ctrl/Cmd+V"><ClipboardPaste size={16}/>粘贴</button>
           <button
             onClick={() => {
               const p = demo();
@@ -1150,13 +1174,14 @@ export default function Home() {
                   <Copy size={15} />
                   复制
                 </button>
+                <button onClick={paste} disabled={!clipboard}><ClipboardPaste size={15}/>粘贴</button>
                 <button className="danger" onClick={remove}>
                   <Trash2 size={15} />
                   删除
                 </button>
               </div>
               <p className="tiny">
-                尺寸与位置均以米为单位。修改后离开输入框生效。
+                Ctrl/Cmd+C 复制，Ctrl/Cmd+V 粘贴；Ctrl/Cmd+D 直接创建副本。复制内容保留在当前页面，刷新后清空。尺寸与位置均以米为单位。
               </p>
             </>
           ) : (
