@@ -70,6 +70,7 @@ export default function Home() {
   const [plan, setPlan] = useState<Plan>(blank),
     [ready, setReady] = useState(false),
     [tool, setTool] = useState('select'),
+    [spaceHeld, setSpaceHeld] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
     [past, setPast] = useState<Plan[]>([]),
     [future, setFuture] = useState<Plan[]>([]),
@@ -238,6 +239,7 @@ export default function Home() {
         )
       )
         return;
+      if (e.code === 'Space' && !(e.target as HTMLElement).closest('button,[role=button]')) { e.preventDefault(); setSpaceHeld(true); }
       if (e.key === 'Escape') cancel();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -252,9 +254,29 @@ export default function Home() {
         remove();
       }
     };
+    const release = (e: KeyboardEvent) => { if (e.code === 'Space') setSpaceHeld(false); };
+    const blur = () => { setSpaceHeld(false); cancel(); };
     window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    window.addEventListener('keyup', release);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('keyup', release); window.removeEventListener('blur', blur); };
   });
+  useEffect(() => {
+    const el = svg.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (gesture) return;
+      const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? size.h : 1);
+      const next = Math.max(.05, Math.min(4, zoom * Math.exp(-Math.max(-200, Math.min(200, delta)) * .002)));
+      const rect = el.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      setOrigin({x: origin.x + px / scale - px / (7 * next), y: origin.y + py / scale - py / (7 * next)});
+      setZoom(next);
+    };
+    el.addEventListener('wheel', wheel, {passive: false});
+    return () => el.removeEventListener('wheel', wheel);
+  }, [gesture, zoom, origin, scale, size.h]);
   function point(e: React.PointerEvent, aligned = true): Point {
     const r = svg.current!.getBoundingClientRect();
     const x = origin.x + (e.clientX - r.left) / scale,
@@ -265,12 +287,15 @@ export default function Home() {
     };
   }
   function down(e: React.PointerEvent<SVGSVGElement>) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== 1) return;
+    e.preventDefault();
     const p = point(e);
     const target = e.target as Element;
     const id = target.closest('[data-id]')?.getAttribute('data-id');
     const found = plan.elements.find((s) => s.id === id);
-    if (tool === 'pan') {
+    if (tool === 'pan' || spaceHeld || e.button === 1 || (tool === 'select' && !found)) {
+      if (gesture) return;
+      if (tool === 'select' && !found && !spaceHeld && e.button === 0) setSelected(null);
       setGesture({
         type: 'pan',
         start: { x: e.clientX, y: e.clientY },
@@ -317,6 +342,10 @@ export default function Home() {
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function move(e: React.PointerEvent<SVGSVGElement>) {
+    if (gesture?.type === 'pan') {
+      setOrigin({x: gesture.origin!.x - (e.clientX - gesture.start.x) / scale, y: gesture.origin!.y - (e.clientY - gesture.start.y) / scale});
+      return;
+    }
     const p = point(e);
     if (lineStart) {
       let end = p;
@@ -333,13 +362,6 @@ export default function Home() {
       return;
     }
     if (!gesture) return;
-    if (gesture.type === 'pan') {
-      setOrigin({
-        x: gesture.origin!.x - (e.clientX - gesture.start.x) / scale,
-        y: gesture.origin!.y - (e.clientY - gesture.start.y) / scale,
-      });
-      return;
-    }
     if (gesture.type === 'draw') {
       setDraft((d) =>
         d ? { ...d, ...rectangle(gesture.start, p, e.shiftKey) } : d,
@@ -363,7 +385,8 @@ export default function Home() {
   }
   function up() {
     if (!gesture) return;
-    if (draft && gesture.type !== 'pan') {
+    if (gesture.type === 'pan') { setGesture(null); return; }
+    if (draft) {
       if (gesture.type === 'draw') {
         if (draft.width >= 0.5 && draft.height >= 0.5) {
           const count =
@@ -522,7 +545,7 @@ export default function Home() {
         data-id={e.id}
         transform={`translate(${e.x} ${e.y}) rotate(${e.rotation})`}
         opacity={preview ? 0.7 : 1}
-        style={{ cursor: tool === 'select' ? 'move' : undefined }}
+        style={{ cursor: spaceHeld ? 'grab' : tool === 'select' ? 'move' : undefined }}
       >
         {e.kind === 'line' ? (
           <>
@@ -777,7 +800,7 @@ export default function Home() {
               <br />
               Shift：正方形 / 水平垂直线。
               <br />
-              选择区域可移动，右下角调尺寸。
+              拖动空白处平移画布。<br/>空格 + 拖动 / 中键拖动也可平移。<br/>滚轮缩放，右下角调区域尺寸。
             </p>
             <span>ESC 取消 · Delete 删除</span>
           </div>
@@ -789,7 +812,7 @@ export default function Home() {
               {toolDefs.find((t) => t.id === tool)?.name}
               {lineStart ? ' · 点击终点' : ''}
             </span>
-            <span className="muted">1 格 = 1 米</span>
+            <span className="muted">空白拖动平移 · 滚轮缩放</span>
           </div>
           <svg
             ref={svg}
@@ -799,12 +822,14 @@ export default function Home() {
             onPointerMove={move}
             onPointerUp={up}
             onPointerCancel={cancel}
+            onLostPointerCapture={() => setGesture(null)}
+            onAuxClick={e => e.preventDefault()}
             style={{
               cursor:
-                tool === 'pan'
+                gesture?.type === 'pan' ? 'grabbing' : tool === 'pan' || spaceHeld
                   ? 'grab'
                   : tool === 'select'
-                    ? 'default'
+                    ? 'grab'
                     : 'crosshair',
             }}
             aria-label="园区平面图绘制画布"
