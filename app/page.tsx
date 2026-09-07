@@ -24,6 +24,7 @@ import {
   Zap,
   RotateCw,
 } from 'lucide-react';
+import { layoutLabel } from '@/lib/label-layout';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -620,6 +621,9 @@ export default function Home() {
   function renderShape(e: Space, preview = false) {
     const chosen = e.id === selected && !preview;
     const color = colors[e.kind];
+    const labelName = e.kind === 'parking' ? `P · ${e.name}` : e.kind === 'charger' ? `ϟ ${e.name}` : e.name;
+    const areaText = e.height > 5 ? `${(e.width * e.height).toFixed(1)} m²` : null;
+    const label = layoutLabel(labelName, Math.abs(e.width), Math.abs(e.height), areaText);
     return (
       <g
         key={e.id}
@@ -678,39 +682,11 @@ export default function Home() {
                 strokeWidth={3 / scale}
               />
             )}
-            <text
-              x={e.width / 2}
-              y={e.height / 2}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill={color}
-              fontSize={Math.max(
-                0.5,
-                Math.min(
-                  1.65,
-                  (e.width / Math.max(e.name.length, 4)) * 1.5,
-                  e.height * 0.24,
-                ),
-              )}
-              fontFamily="Arial, sans-serif"
-            >
-              {e.kind === 'parking'
-                ? `P · ${e.name}`
-                : e.kind === 'charger'
-                  ? `ϟ ${e.name}`
-                  : e.name}
-            </text>
-            {e.height > 5 && (
-              <text
-                x={e.width / 2}
-                y={e.height / 2 + 2.3}
-                textAnchor="middle"
-                fill={color}
-                fontSize={Math.min(1.3, e.width / 7)}
-              >
-                {(e.width * e.height).toFixed(1)} m²
-              </text>
-            )}
+            <title>{labelName}{areaText ? ` · ${areaText}` : ''}</title>
+            <svg x={label.padding} y={label.padding} width={label.innerWidth} height={label.innerHeight} overflow="hidden" pointerEvents="none" aria-hidden="true">
+              {label.lines.map((line, i) => <text key={i} x={label.innerWidth / 2} y={line.y} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={label.font} fontFamily="Arial, sans-serif">{line.text}</text>)}
+              {areaText && <text x={label.innerWidth / 2} y={label.areaY} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={label.areaFont} fontFamily="Arial, sans-serif">{areaText}</text>}
+            </svg>
           </>
         )}
         {chosen && (
