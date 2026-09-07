@@ -38,6 +38,9 @@ import {
   createSpace,
   rectangle,
   rotateSpace,
+  snapSpace,
+  type SnapSide,
+  type SnapAlignment,
   validatePlan,
   demo,
   colors,
@@ -78,6 +81,10 @@ export default function Home() {
     [ready, setReady] = useState(false),
     [tool, setTool] = useState('select'),
     [spaceHeld, setSpaceHeld] = useState(false),
+    [snapTarget, setSnapTarget] = useState(''),
+    [snapSide, setSnapSide] = useState<SnapSide>('auto'),
+    [snapAlignment, setSnapAlignment] = useState<SnapAlignment>('start'),
+    [pickingTarget, setPickingTarget] = useState<string | null>(null),
     [selected, setSelected] = useState<string | null>(null),
     [past, setPast] = useState<Plan[]>([]),
     [future, setFuture] = useState<Plan[]>([]),
@@ -197,6 +204,11 @@ export default function Home() {
     setFuture([]);
     setPlan(next);
   }
+  function applySnap() {
+    const source = plan.elements.find(e=>e.id===selected), target = plan.elements.find(e=>e.id===snapTarget);
+    if (!source || !target) {setNotice('请先选择 A 和目标 B');return;}
+    try {const result=snapSpace(source,target,snapSide,snapAlignment); cancel(); commit({...plan,elements:plan.elements.map(e=>e.id===source.id?result:e)});setNotice(`已将 ${source.name} 与 ${target.name} 对齐贴合`);} catch(err) {setNotice(err instanceof Error?err.message:'吸附失败');}
+  }
   function update(patch: Partial<Space>) {
     if (item)
       commit({
@@ -214,6 +226,7 @@ export default function Home() {
       });
   }
   function cancel() {
+    setPickingTarget(null);
     setDraft(null);
     setGesture(null);
     setLineStart(null);
@@ -333,6 +346,10 @@ export default function Home() {
     const target = e.target as Element;
     const id = target.closest('[data-id]')?.getAttribute('data-id');
     const found = plan.elements.find((s) => s.id === id);
+    if (pickingTarget && e.button === 0 && !spaceHeld) {
+      if (!found || found.kind === 'line' || found.id === pickingTarget) { setNotice('请点击另一个矩形区域作为 B'); return; }
+      setSnapTarget(found.id); setSelected(pickingTarget); setPickingTarget(null); setNotice(`已选择目标 ${found.name}，点击「执行吸附」完成`); return;
+    }
     if (
       tool === 'pan' ||
       spaceHeld ||
@@ -908,7 +925,7 @@ export default function Home() {
             <span>
               <Layers size={16} />
               {toolDefs.find((t) => t.id === tool)?.name}
-              {lineStart ? ' · 点击终点' : ''}
+              {pickingTarget ? ' · 点击目标 B' : lineStart ? ' · 点击终点' : ''}
             </span>
             <span className="muted">空白拖动平移 · 滚轮缩放</span>
           </div>
@@ -1042,6 +1059,15 @@ export default function Home() {
                 {field('位置 Y（m）', 'y', true, -1000000)}
               </div>
               {field('旋转角度（°）', 'rotation', true, -360)}
+              {item.kind !== 'line' && <section className="plan-settings">
+                <h2>吸附到其他区域</h2>
+                <p className="tiny">当前为 A；A 跟随 B 的角度，尺寸不变，边缘无间隙贴合。方向以 B 自身朝向为准。</p>
+                <label className="field">目标 B<Select value={plan.elements.some(e=>e.id===snapTarget&&e.id!==item.id)?snapTarget:null} onValueChange={v=>{setSnapTarget(v||'');setPickingTarget(null);}}><SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="选择目标区域"/></SelectTrigger><SelectContent>{plan.elements.filter(e=>e.id!==item.id&&e.kind!=='line').map((e,i)=><SelectItem key={e.id} value={e.id}>{e.name} · {i+1}</SelectItem>)}</SelectContent></Select></label>
+                <button className="mt-2 w-full" onClick={()=>{setPickingTarget(item.id);setTool('select');setDraft(null);setGesture(null);setLineStart(null);}}>{pickingTarget?'请在画布点击 B（Esc 取消）':'在画布上选择 B'}</button>
+                <label className="field">贴到 B 的哪一边<Select value={snapSide} onValueChange={v=>v&&setSnapSide(v as SnapSide)}><SelectTrigger className="mt-1.5 w-full"><SelectValue/></SelectTrigger><SelectContent>{[['auto','自动选择最近一边'],['left','左边'],['right','右边'],['top','上边'],['bottom','下边']].map(([v,t])=><SelectItem key={v} value={v}>{t}</SelectItem>)}</SelectContent></Select></label>
+                <label className="field">沿贴合边对齐<Select value={snapAlignment} onValueChange={v=>v&&setSnapAlignment(v as SnapAlignment)}><SelectTrigger className="mt-1.5 w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="start">起点对齐（顶部 / 左侧）</SelectItem><SelectItem value="center">居中对齐</SelectItem><SelectItem value="end">终点对齐（底部 / 右侧）</SelectItem></SelectContent></Select></label>
+                <button className="primary mt-3 w-full" disabled={!snapTarget||snapTarget===item.id||!plan.elements.some(e=>e.id===snapTarget&&e.kind!=='line')} onClick={applySnap}>执行吸附</button>
+              </section>}
               {item.kind !== 'line' && (
                 <div className="inspector-actions">
                   <button

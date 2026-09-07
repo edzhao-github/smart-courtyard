@@ -234,3 +234,16 @@ export function rotateSpace(space: Space, rotation: number): Space {
       (space.height / 2) * Math.cos(after),
   };
 }
+
+export type SnapSide = 'auto' | 'left' | 'right' | 'top' | 'bottom';
+export type SnapAlignment = 'start' | 'center' | 'end';
+export function snapSpace(source: Space, target: Space, side: SnapSide = 'auto', alignment: SnapAlignment = 'start'): Space {
+  if (source.id === target.id || source.kind === 'line' || target.kind === 'line') throw new Error('请选择另一个矩形区域作为目标');
+  const along = (outer: number, inner: number) => alignment === 'center' ? (outer-inner)/2 : alignment === 'end' ? outer-inner : 0;
+  const angle = target.rotation * Math.PI / 180;
+  const offsets = {left: [-source.width, along(target.height,source.height)], right: [target.width,along(target.height,source.height)], top:[along(target.width,source.width),-source.height], bottom:[along(target.width,source.width),target.height]};
+  const candidates = Object.entries(offsets).filter(([key])=>side==='auto'||key===side).map(([, [u,v]])=>({...source, rotation:target.rotation,x:target.x+u*Math.cos(angle)-v*Math.sin(angle),y:target.y+u*Math.sin(angle)+v*Math.cos(angle)}));
+  const center = (e: Space) => {const a=e.rotation*Math.PI/180;return {x:e.x+e.width/2*Math.cos(a)-e.height/2*Math.sin(a),y:e.y+e.width/2*Math.sin(a)+e.height/2*Math.cos(a)};};
+  const oldCenter=center(source);
+  return candidates.sort((a,b)=>{const ca=center(a),cb=center(b);return Math.hypot(ca.x-oldCenter.x,ca.y-oldCenter.y)-Math.hypot(cb.x-oldCenter.x,cb.y-oldCenter.y);})[0];
+}
