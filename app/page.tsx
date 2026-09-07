@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { flushSync } from 'react-dom';
 import {
   MousePointer2,
@@ -68,7 +69,16 @@ type Gesture = {
   original?: Space;
   origin?: Point;
 };
-const BUSINESS_OPTIONS = ['未设置', '宠物', '运动', '餐饮', '办公室', '仓库', '汽车', '花店'];
+const BUSINESS_OPTIONS = [
+  '未设置',
+  '宠物',
+  '运动',
+  '餐饮',
+  '办公室',
+  '仓库',
+  '汽车',
+  '花店',
+];
 const KEY = 'courtyard-plan-v1';
 function download(name: string, body: string, type: string) {
   const url = URL.createObjectURL(new Blob([body], { type }));
@@ -209,9 +219,23 @@ export default function Home() {
     setPlan(next);
   }
   function applySnap() {
-    const source = plan.elements.find(e=>e.id===selected), target = plan.elements.find(e=>e.id===snapTarget);
-    if (!source || !target) {setNotice('请先选择 A 和目标 B');return;}
-    try {const result=snapSpace(source,target,snapSide,snapAlignment); cancel(); commit({...plan,elements:plan.elements.map(e=>e.id===source.id?result:e)});setNotice(`已将 ${source.name} 与 ${target.name} 对齐贴合`);} catch(err) {setNotice(err instanceof Error?err.message:'吸附失败');}
+    const source = plan.elements.find((e) => e.id === selected),
+      target = plan.elements.find((e) => e.id === snapTarget);
+    if (!source || !target) {
+      setNotice('请先选择 A 和目标 B');
+      return;
+    }
+    try {
+      const result = snapSpace(source, target, snapSide, snapAlignment);
+      cancel();
+      commit({
+        ...plan,
+        elements: plan.elements.map((e) => (e.id === source.id ? result : e)),
+      });
+      setNotice(`已将 ${source.name} 与 ${target.name} 对齐贴合`);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : '吸附失败');
+    }
   }
   function update(patch: Partial<Space>) {
     if (item)
@@ -278,9 +302,36 @@ export default function Home() {
         setSpaceHeld(true);
       }
       if (e.key === 'Escape') cancel();
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'c' && item) { e.preventDefault(); copy(); }
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'v' && clipboard) { e.preventDefault(); paste(); }
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.repeat && e.key.toLowerCase() === 'd' && item) { e.preventDefault(); duplicate(); }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.repeat &&
+        e.key.toLowerCase() === 'c' &&
+        item
+      ) {
+        e.preventDefault();
+        copy();
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.repeat &&
+        e.key.toLowerCase() === 'v' &&
+        clipboard
+      ) {
+        e.preventDefault();
+        paste();
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.repeat &&
+        e.key.toLowerCase() === 'd' &&
+        item
+      ) {
+        e.preventDefault();
+        duplicate();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -354,8 +405,15 @@ export default function Home() {
     const id = target.closest('[data-id]')?.getAttribute('data-id');
     const found = plan.elements.find((s) => s.id === id);
     if (pickingTarget && e.button === 0 && !spaceHeld) {
-      if (!found || found.kind === 'line' || found.id === pickingTarget) { setNotice('请点击另一个矩形区域作为 B'); return; }
-      setSnapTarget(found.id); setSelected(pickingTarget); setPickingTarget(null); setNotice(`已选择目标 ${found.name}，点击「执行吸附」完成`); return;
+      if (!found || found.kind === 'line' || found.id === pickingTarget) {
+        setNotice('请点击另一个矩形区域作为 B');
+        return;
+      }
+      setSnapTarget(found.id);
+      setSelected(pickingTarget);
+      setPickingTarget(null);
+      setNotice(`已选择目标 ${found.name}，点击「执行吸附」完成`);
+      return;
     }
     if (
       tool === 'pan' ||
@@ -606,9 +664,16 @@ export default function Home() {
     if (!clipboard) return;
     pasteCount.current += 1;
     const offset = pasteCount.current * 2;
-    const next = {...structuredClone(clipboard), id: crypto.randomUUID(), name: `${clipboard.name} 副本 ${pasteCount.current}`, x: clipboard.x + offset, y: clipboard.y + offset};
-    cancel(); setTool('select');
-    commit({...plan,elements:[...plan.elements,next]});
+    const next = {
+      ...structuredClone(clipboard),
+      id: crypto.randomUUID(),
+      name: `${clipboard.name} 副本 ${pasteCount.current}`,
+      x: clipboard.x + offset,
+      y: clipboard.y + offset,
+    };
+    cancel();
+    setTool('select');
+    commit({ ...plan, elements: [...plan.elements, next] });
     setSelected(next.id);
     setNotice('已粘贴，可拖动副本或使用吸附功能对齐');
   }
@@ -661,9 +726,20 @@ export default function Home() {
   function renderShape(e: Space, preview = false) {
     const chosen = e.id === selected && !preview;
     const color = colors[e.kind];
-    const labelName = e.kind === 'parking' ? `P · ${e.name}` : e.kind === 'charger' ? `ϟ ${e.name}` : e.name;
-    const areaText = e.height > 5 ? `${(e.width * e.height).toFixed(1)} m²` : null;
-    const label = layoutLabel(labelName, Math.abs(e.width), Math.abs(e.height), areaText);
+    const labelName =
+      e.kind === 'parking'
+        ? `P · ${e.name}`
+        : e.kind === 'charger'
+          ? `ϟ ${e.name}`
+          : e.name;
+    const areaText =
+      e.height > 5 ? `${(e.width * e.height).toFixed(1)} m²` : null;
+    const label = layoutLabel(
+      labelName,
+      Math.abs(e.width),
+      Math.abs(e.height),
+      areaText,
+    );
     return (
       <g
         key={e.id}
@@ -722,10 +798,46 @@ export default function Home() {
                 strokeWidth={3 / scale}
               />
             )}
-            <title>{labelName}{areaText ? ` · ${areaText}` : ''}</title>
-            <svg x={label.padding} y={label.padding} width={label.innerWidth} height={label.innerHeight} overflow="hidden" pointerEvents="none" aria-hidden="true">
-              {label.lines.map((line, i) => <text key={i} x={label.innerWidth / 2} y={line.y} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={label.font} fontFamily="Arial, sans-serif">{line.text}</text>)}
-              {areaText && <text x={label.innerWidth / 2} y={label.areaY} textAnchor="middle" dominantBaseline="central" fill={color} fontSize={label.areaFont} fontFamily="Arial, sans-serif">{areaText}</text>}
+            <title>
+              {labelName}
+              {areaText ? ` · ${areaText}` : ''}
+            </title>
+            <svg
+              x={label.padding}
+              y={label.padding}
+              width={label.innerWidth}
+              height={label.innerHeight}
+              overflow="hidden"
+              pointerEvents="none"
+              aria-hidden="true"
+            >
+              {label.lines.map((line, i) => (
+                <text
+                  key={i}
+                  x={label.innerWidth / 2}
+                  y={line.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={color}
+                  fontSize={label.font}
+                  fontFamily="Arial, sans-serif"
+                >
+                  {line.text}
+                </text>
+              ))}
+              {areaText && (
+                <text
+                  x={label.innerWidth / 2}
+                  y={label.areaY}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={color}
+                  fontSize={label.areaFont}
+                  fontFamily="Arial, sans-serif"
+                >
+                  {areaText}
+                </text>
+              )}
             </svg>
           </>
         )}
@@ -800,6 +912,17 @@ export default function Home() {
           </b>
           <span className="divider" />
           <span>园区绘图工作台</span>
+          <Link
+            href="/dashboard"
+            style={{
+              fontSize: 14,
+              color: '#167560',
+              textDecoration: 'none',
+              marginLeft: 12,
+            }}
+          >
+            管理驾驶舱 ↗
+          </Link>
         </div>
         <div className="actions">
           <button onClick={() => file.current?.click()}>
@@ -842,8 +965,22 @@ export default function Home() {
           </h1>
         </div>
         <div className="actions">
-          <button onClick={copy} disabled={!item} title="复制选中区域 Ctrl/Cmd+C"><Copy size={16}/>复制</button>
-          <button onClick={paste} disabled={!clipboard} title="粘贴区域 Ctrl/Cmd+V"><ClipboardPaste size={16}/>粘贴</button>
+          <button
+            onClick={copy}
+            disabled={!item}
+            title="复制选中区域 Ctrl/Cmd+C"
+          >
+            <Copy size={16} />
+            复制
+          </button>
+          <button
+            onClick={paste}
+            disabled={!clipboard}
+            title="粘贴区域 Ctrl/Cmd+V"
+          >
+            <ClipboardPaste size={16} />
+            粘贴
+          </button>
           <button
             onClick={() => {
               const p = demo();
@@ -1084,15 +1221,117 @@ export default function Home() {
                 {field('位置 Y（m）', 'y', true, -1000000)}
               </div>
               {field('旋转角度（°）', 'rotation', true, -360)}
-              {item.kind !== 'line' && <section className="plan-settings">
-                <h2>吸附到其他区域</h2>
-                <p className="tiny">当前为 A；A 跟随 B 的角度，尺寸不变，边缘无间隙贴合。方向以 B 自身朝向为准。</p>
-                <label className="field">目标 B<Select value={plan.elements.some(e=>e.id===snapTarget&&e.id!==item.id)?snapTarget:null} onValueChange={v=>{setSnapTarget(v||'');setPickingTarget(null);}}><SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="选择目标区域"/></SelectTrigger><SelectContent>{plan.elements.filter(e=>e.id!==item.id&&e.kind!=='line').map((e,i)=><SelectItem key={e.id} value={e.id}>{e.name} · {i+1}</SelectItem>)}</SelectContent></Select></label>
-                <button className="mt-2 w-full" onClick={()=>{setPickingTarget(item.id);setTool('select');setDraft(null);setGesture(null);setLineStart(null);}}>{pickingTarget?'请在画布点击 B（Esc 取消）':'在画布上选择 B'}</button>
-                <label className="field">贴到 B 的哪一边<Select value={snapSide} onValueChange={v=>v&&setSnapSide(v as SnapSide)}><SelectTrigger className="mt-1.5 w-full"><SelectValue/></SelectTrigger><SelectContent>{[['auto','自动选择最近一边'],['left','左边'],['right','右边'],['top','上边'],['bottom','下边']].map(([v,t])=><SelectItem key={v} value={v}>{t}</SelectItem>)}</SelectContent></Select></label>
-                <label className="field">沿贴合边对齐<Select value={snapAlignment} onValueChange={v=>v&&setSnapAlignment(v as SnapAlignment)}><SelectTrigger className="mt-1.5 w-full"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="start">起点对齐（顶部 / 左侧）</SelectItem><SelectItem value="center">居中对齐</SelectItem><SelectItem value="end">终点对齐（底部 / 右侧）</SelectItem></SelectContent></Select></label>
-                <button className="primary mt-3 w-full" disabled={!snapTarget||snapTarget===item.id||!plan.elements.some(e=>e.id===snapTarget&&e.kind!=='line')} onClick={applySnap}>执行吸附</button>
-              </section>}
+              {item.kind !== 'line' && (
+                <section className="plan-settings">
+                  <h2>吸附到其他区域</h2>
+                  <p className="tiny">
+                    当前为 A；A 跟随 B 的角度，尺寸不变，边缘无间隙贴合。方向以
+                    B 自身朝向为准。
+                  </p>
+                  <label className="field">
+                    目标 B
+                    <Select
+                      value={
+                        plan.elements.some(
+                          (e) => e.id === snapTarget && e.id !== item.id,
+                        )
+                          ? snapTarget
+                          : null
+                      }
+                      onValueChange={(v) => {
+                        setSnapTarget(v || '');
+                        setPickingTarget(null);
+                      }}
+                    >
+                      <SelectTrigger className="mt-1.5 w-full">
+                        <SelectValue placeholder="选择目标区域" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plan.elements
+                          .filter((e) => e.id !== item.id && e.kind !== 'line')
+                          .map((e, i) => (
+                            <SelectItem key={e.id} value={e.id}>
+                              {e.name} · {i + 1}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <button
+                    className="mt-2 w-full"
+                    onClick={() => {
+                      setPickingTarget(item.id);
+                      setTool('select');
+                      setDraft(null);
+                      setGesture(null);
+                      setLineStart(null);
+                    }}
+                  >
+                    {pickingTarget
+                      ? '请在画布点击 B（Esc 取消）'
+                      : '在画布上选择 B'}
+                  </button>
+                  <label className="field">
+                    贴到 B 的哪一边
+                    <Select
+                      value={snapSide}
+                      onValueChange={(v) => v && setSnapSide(v as SnapSide)}
+                    >
+                      <SelectTrigger className="mt-1.5 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[
+                          ['auto', '自动选择最近一边'],
+                          ['left', '左边'],
+                          ['right', '右边'],
+                          ['top', '上边'],
+                          ['bottom', '下边'],
+                        ].map(([v, t]) => (
+                          <SelectItem key={v} value={v}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="field">
+                    沿贴合边对齐
+                    <Select
+                      value={snapAlignment}
+                      onValueChange={(v) =>
+                        v && setSnapAlignment(v as SnapAlignment)
+                      }
+                    >
+                      <SelectTrigger className="mt-1.5 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="start">
+                          起点对齐（顶部 / 左侧）
+                        </SelectItem>
+                        <SelectItem value="center">居中对齐</SelectItem>
+                        <SelectItem value="end">
+                          终点对齐（底部 / 右侧）
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <button
+                    className="primary mt-3 w-full"
+                    disabled={
+                      !snapTarget ||
+                      snapTarget === item.id ||
+                      !plan.elements.some(
+                        (e) => e.id === snapTarget && e.kind !== 'line',
+                      )
+                    }
+                    onClick={applySnap}
+                  >
+                    执行吸附
+                  </button>
+                </section>
+              )}
               {item.kind !== 'line' && (
                 <div className="inspector-actions">
                   <button
@@ -1120,12 +1359,28 @@ export default function Home() {
                     {field('层高（m）', 'ceiling', true)}
                   </div>
                   <h3 className="section-title">经营信息</h3>
-                  <label className="field">业态
-                    <Select value={item.business} onValueChange={value => { if(value !== null) update({business:value}); }}>
-                      <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="选择业态" /></SelectTrigger>
+                  <label className="field">
+                    业态
+                    <Select
+                      value={item.business}
+                      onValueChange={(value) => {
+                        if (value !== null) update({ business: value });
+                      }}
+                    >
+                      <SelectTrigger className="mt-1.5 w-full">
+                        <SelectValue placeholder="选择业态" />
+                      </SelectTrigger>
                       <SelectContent>
-                        {!BUSINESS_OPTIONS.includes(item.business) && <SelectItem value={item.business}>{item.business || '空白'}（原有值）</SelectItem>}
-                        {BUSINESS_OPTIONS.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+                        {!BUSINESS_OPTIONS.includes(item.business) && (
+                          <SelectItem value={item.business}>
+                            {item.business || '空白'}（原有值）
+                          </SelectItem>
+                        )}
+                        {BUSINESS_OPTIONS.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {value}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </label>
@@ -1183,14 +1438,18 @@ export default function Home() {
                   <Copy size={15} />
                   复制
                 </button>
-                <button onClick={paste} disabled={!clipboard}><ClipboardPaste size={15}/>粘贴</button>
+                <button onClick={paste} disabled={!clipboard}>
+                  <ClipboardPaste size={15} />
+                  粘贴
+                </button>
                 <button className="danger" onClick={remove}>
                   <Trash2 size={15} />
                   删除
                 </button>
               </div>
               <p className="tiny">
-                Ctrl/Cmd+C 复制，Ctrl/Cmd+V 粘贴；Ctrl/Cmd+D 直接创建副本。复制内容保留在当前页面，刷新后清空。尺寸与位置均以米为单位。
+                Ctrl/Cmd+C 复制，Ctrl/Cmd+V 粘贴；Ctrl/Cmd+D
+                直接创建副本。复制内容保留在当前页面，刷新后清空。尺寸与位置均以米为单位。
               </p>
             </>
           ) : (
