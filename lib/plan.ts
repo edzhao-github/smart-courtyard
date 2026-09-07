@@ -1,4 +1,11 @@
-export type Kind = 'room' | 'greenhouse' | 'outdoor' | 'gate' | 'line';
+export type Kind =
+  | 'room'
+  | 'greenhouse'
+  | 'outdoor'
+  | 'gate'
+  | 'line'
+  | 'parking'
+  | 'charger';
 export type Space = {
   id: string;
   kind: Kind;
@@ -32,6 +39,8 @@ export const names: Record<Kind, string> = {
   outdoor: '露天区',
   gate: '园区大门',
   line: '结构线',
+  parking: '停车场',
+  charger: '充电桩',
 };
 export const colors: Record<Kind, string> = {
   room: '#507fb8',
@@ -39,6 +48,8 @@ export const colors: Record<Kind, string> = {
   outdoor: '#c69a40',
   gate: '#b06978',
   line: '#697d89',
+  parking: '#476ac0',
+  charger: '#16866e',
 };
 export const blank: Plan = {
   schemaVersion: 1,
@@ -195,5 +206,31 @@ export function demo(): Plan {
     name: '梧桐院 · 参考示意（非实测）',
     unit: 'm',
     elements,
+  };
+}
+
+// Rotate about the visual center while retaining the top-left based file format.
+export function rotateSpace(space: Space, rotation: number): Space {
+  const before = (space.rotation * Math.PI) / 180;
+  const after = (rotation * Math.PI) / 180;
+  const cx =
+    space.x +
+    (space.width / 2) * Math.cos(before) -
+    (space.height / 2) * Math.sin(before);
+  const cy =
+    space.y +
+    (space.width / 2) * Math.sin(before) +
+    (space.height / 2) * Math.cos(before);
+  return {
+    ...space,
+    rotation,
+    x:
+      cx -
+      (space.width / 2) * Math.cos(after) +
+      (space.height / 2) * Math.sin(after),
+    y:
+      cy -
+      (space.width / 2) * Math.sin(after) -
+      (space.height / 2) * Math.cos(after),
   };
 }

@@ -57,3 +57,31 @@ test('lines accept signed deltas and zero thickness, regions require positive si
   p.elements = [createSpace('room', 0, 0, 0, 4)];
   assert.throws(() => validatePlan(p));
 });
+
+test('parking and charger survive a saved drawing roundtrip', () => {
+  const elements = ['parking', 'charger'].map((kind) =>
+    createSpace(kind, 12, 8, 4, 2),
+  );
+  const plan = { schemaVersion: 1, name: '设施', unit: 'm', elements };
+  assert.deepEqual(validatePlan(JSON.parse(JSON.stringify(plan))), plan);
+});
+test('rectangle rotation preserves center and returns to original geometry', async () => {
+  const { rotateSpace } = await import('../lib/plan.ts');
+  const s = { ...createSpace('parking', 10, 20, 12, 6), rotation: 37 };
+  const center = (e) => {
+    const a = (e.rotation * Math.PI) / 180;
+    return [
+      e.x + (e.width / 2) * Math.cos(a) - (e.height / 2) * Math.sin(a),
+      e.y + (e.width / 2) * Math.sin(a) + (e.height / 2) * Math.cos(a),
+    ];
+  };
+  const before = center(s),
+    r = rotateSpace(s, -120),
+    after = center(r);
+  before.forEach((v, i) => assert.ok(Math.abs(v - after[i]) < 1e-10));
+  const back = rotateSpace(r, 37);
+  assert.ok(Math.abs(s.x - back.x) < 1e-10);
+  assert.ok(Math.abs(s.y - back.y) < 1e-10);
+  assert.equal(r.width, s.width);
+  assert.equal(r.height, s.height);
+});

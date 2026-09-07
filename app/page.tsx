@@ -20,6 +20,9 @@ import {
   Copy,
   Trash2,
   Hand,
+  ParkingSquare,
+  Zap,
+  RotateCw,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -33,6 +36,7 @@ import {
   blank,
   createSpace,
   rectangle,
+  rotateSpace,
   validatePlan,
   demo,
   colors,
@@ -48,11 +52,13 @@ const toolDefs = [
   { id: 'greenhouse', name: '大棚区', icon: Sprout },
   { id: 'outdoor', name: '露天区', icon: Sun },
   { id: 'gate', name: '园区大门', icon: DoorOpen },
+  { id: 'parking', name: '停车场', icon: ParkingSquare },
+  { id: 'charger', name: '充电桩', icon: Zap },
   { id: 'pan', name: '平移画布', icon: Hand },
 ];
 type Point = { x: number; y: number };
 type Gesture = {
-  type: 'draw' | 'move' | 'resize' | 'pan';
+  type: 'draw' | 'move' | 'resize' | 'pan' | 'rotate';
   start: Point;
   original?: Space;
   origin?: Point;
@@ -195,7 +201,14 @@ export default function Home() {
       commit({
         ...plan,
         elements: plan.elements.map((e) =>
-          e.id === item.id ? { ...e, ...patch } : e,
+          e.id === item.id
+            ? patch.rotation !== undefined && e.kind !== 'line'
+              ? rotateSpace(
+                  { ...e, ...patch, rotation: e.rotation },
+                  patch.rotation,
+                )
+              : { ...e, ...patch }
+            : e,
         ),
       });
   }
@@ -239,7 +252,13 @@ export default function Home() {
         )
       )
         return;
-      if (e.code === 'Space' && !(e.target as HTMLElement).closest('button,[role=button]')) { e.preventDefault(); setSpaceHeld(true); }
+      if (
+        e.code === 'Space' &&
+        !(e.target as HTMLElement).closest('button,[role=button]')
+      ) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
       if (e.key === 'Escape') cancel();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -254,12 +273,21 @@ export default function Home() {
         remove();
       }
     };
-    const release = (e: KeyboardEvent) => { if (e.code === 'Space') setSpaceHeld(false); };
-    const blur = () => { setSpaceHeld(false); cancel(); };
+    const release = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceHeld(false);
+    };
+    const blur = () => {
+      setSpaceHeld(false);
+      cancel();
+    };
     window.addEventListener('keydown', key);
     window.addEventListener('keyup', release);
     window.addEventListener('blur', blur);
-    return () => { window.removeEventListener('keydown', key); window.removeEventListener('keyup', release); window.removeEventListener('blur', blur); };
+    return () => {
+      window.removeEventListener('keydown', key);
+      window.removeEventListener('keyup', release);
+      window.removeEventListener('blur', blur);
+    };
   });
   useEffect(() => {
     const el = svg.current;
@@ -267,14 +295,25 @@ export default function Home() {
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       if (gesture) return;
-      const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? size.h : 1);
-      const next = Math.max(.05, Math.min(4, zoom * Math.exp(-Math.max(-200, Math.min(200, delta)) * .002)));
+      const delta =
+        e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? size.h : 1);
+      const next = Math.max(
+        0.05,
+        Math.min(
+          4,
+          zoom * Math.exp(-Math.max(-200, Math.min(200, delta)) * 0.002),
+        ),
+      );
       const rect = el.getBoundingClientRect();
-      const px = e.clientX - rect.left, py = e.clientY - rect.top;
-      setOrigin({x: origin.x + px / scale - px / (7 * next), y: origin.y + py / scale - py / (7 * next)});
+      const px = e.clientX - rect.left,
+        py = e.clientY - rect.top;
+      setOrigin({
+        x: origin.x + px / scale - px / (7 * next),
+        y: origin.y + py / scale - py / (7 * next),
+      });
       setZoom(next);
     };
-    el.addEventListener('wheel', wheel, {passive: false});
+    el.addEventListener('wheel', wheel, { passive: false });
     return () => el.removeEventListener('wheel', wheel);
   }, [gesture, zoom, origin, scale, size.h]);
   function point(e: React.PointerEvent, aligned = true): Point {
@@ -293,9 +332,15 @@ export default function Home() {
     const target = e.target as Element;
     const id = target.closest('[data-id]')?.getAttribute('data-id');
     const found = plan.elements.find((s) => s.id === id);
-    if (tool === 'pan' || spaceHeld || e.button === 1 || (tool === 'select' && !found)) {
+    if (
+      tool === 'pan' ||
+      spaceHeld ||
+      e.button === 1 ||
+      (tool === 'select' && !found)
+    ) {
       if (gesture) return;
-      if (tool === 'select' && !found && !spaceHeld && e.button === 0) setSelected(null);
+      if (tool === 'select' && !found && !spaceHeld && e.button === 0)
+        setSelected(null);
       setGesture({
         type: 'pan',
         start: { x: e.clientX, y: e.clientY },
@@ -308,8 +353,16 @@ export default function Home() {
       setSelected(found?.id || null);
       if (found) {
         setGesture({
-          type: target.getAttribute('data-handle') ? 'resize' : 'move',
-          start: p,
+          type:
+            target.getAttribute('data-handle') === 'rotate'
+              ? 'rotate'
+              : target.getAttribute('data-handle') === 'resize'
+                ? 'resize'
+                : 'move',
+          start:
+            target.getAttribute('data-handle') === 'rotate'
+              ? point(e, false)
+              : p,
           original: found,
         });
         setDraft(found);
@@ -343,7 +396,10 @@ export default function Home() {
   }
   function move(e: React.PointerEvent<SVGSVGElement>) {
     if (gesture?.type === 'pan') {
-      setOrigin({x: gesture.origin!.x - (e.clientX - gesture.start.x) / scale, y: gesture.origin!.y - (e.clientY - gesture.start.y) / scale});
+      setOrigin({
+        x: gesture.origin!.x - (e.clientX - gesture.start.x) / scale,
+        y: gesture.origin!.y - (e.clientY - gesture.start.y) / scale,
+      });
       return;
     }
     const p = point(e);
@@ -369,6 +425,24 @@ export default function Home() {
       return;
     }
     const o = gesture.original!;
+    if (gesture.type === 'rotate') {
+      const a = (o.rotation * Math.PI) / 180;
+      const cx =
+        o.x + (o.width / 2) * Math.cos(a) - (o.height / 2) * Math.sin(a);
+      const cy =
+        o.y + (o.width / 2) * Math.sin(a) + (o.height / 2) * Math.cos(a);
+      const cursor = point(e, false);
+      let rotation =
+        o.rotation +
+        ((Math.atan2(cursor.y - cy, cursor.x - cx) -
+          Math.atan2(gesture.start.y - cy, gesture.start.x - cx)) *
+          180) /
+          Math.PI;
+      rotation = ((((rotation + 180) % 360) + 360) % 360) - 180;
+      if (e.shiftKey) rotation = Math.round(rotation / 15) * 15;
+      setDraft(rotateSpace(o, Math.round(rotation * 10) / 10));
+      return;
+    }
     const dx = p.x - gesture.start.x,
       dy = p.y - gesture.start.y;
     if (gesture.type === 'move') setDraft({ ...o, x: o.x + dx, y: o.y + dy });
@@ -385,14 +459,21 @@ export default function Home() {
   }
   function up() {
     if (!gesture) return;
-    if (gesture.type === 'pan') { setGesture(null); return; }
+    if (gesture.type === 'pan') {
+      setGesture(null);
+      return;
+    }
     if (draft) {
       if (gesture.type === 'draw') {
-        if (draft.width >= 0.5 && draft.height >= 0.5) {
+        const drawing =
+          draft.kind === 'charger' && draft.width < 0.5 && draft.height < 0.5
+            ? { ...draft, width: 2, height: 2 }
+            : draft;
+        if (drawing.width >= 0.5 && drawing.height >= 0.5) {
           const count =
             plan.elements.filter((e) => e.kind === draft.kind).length + 1;
           const el = {
-            ...draft,
+            ...drawing,
             name: `${names[draft.kind]} ${String(count).padStart(2, '0')}`,
           };
           commit({ ...plan, elements: [...plan.elements, el] });
@@ -545,7 +626,9 @@ export default function Home() {
         data-id={e.id}
         transform={`translate(${e.x} ${e.y}) rotate(${e.rotation})`}
         opacity={preview ? 0.7 : 1}
-        style={{ cursor: spaceHeld ? 'grab' : tool === 'select' ? 'move' : undefined }}
+        style={{
+          cursor: spaceHeld ? 'grab' : tool === 'select' ? 'move' : undefined,
+        }}
       >
         {e.kind === 'line' ? (
           <>
@@ -576,9 +659,13 @@ export default function Home() {
                   ? 'url(#greenhouse)'
                   : e.kind === 'outdoor'
                     ? 'url(#outdoor)'
-                    : e.kind === 'gate'
-                      ? '#f2dfe4'
-                      : '#e4edf8'
+                    : e.kind === 'parking'
+                      ? '#e7edff'
+                      : e.kind === 'charger'
+                        ? '#d9f4ea'
+                        : e.kind === 'gate'
+                          ? '#f2dfe4'
+                          : '#e4edf8'
               }
               stroke={color}
               strokeWidth={1.5 / scale}
@@ -607,7 +694,11 @@ export default function Home() {
               )}
               fontFamily="Arial, sans-serif"
             >
-              {e.name}
+              {e.kind === 'parking'
+                ? `P · ${e.name}`
+                : e.kind === 'charger'
+                  ? `ϟ ${e.name}`
+                  : e.name}
             </text>
             {e.height > 5 && (
               <text
@@ -635,6 +726,31 @@ export default function Home() {
               strokeDasharray={`${4 / scale} ${3 / scale}`}
               pointerEvents="none"
             />
+            {e.kind !== 'line' && (
+              <>
+                <line
+                  x1={e.width / 2}
+                  y1={0}
+                  x2={e.width / 2}
+                  y2={-28 / scale}
+                  stroke="#127560"
+                  strokeWidth={1.5 / scale}
+                  pointerEvents="none"
+                />
+                <circle
+                  data-handle="rotate"
+                  cx={e.width / 2}
+                  cy={-28 / scale}
+                  r={9 / scale}
+                  fill="white"
+                  stroke="#127560"
+                  strokeWidth={2 / scale}
+                  style={{ cursor: 'grab' }}
+                >
+                  <title>拖动旋转 · Shift 吸附15°</title>
+                </circle>
+              </>
+            )}
             {e.kind !== 'line' && (
               <rect
                 data-handle="resize"
@@ -800,7 +916,13 @@ export default function Home() {
               <br />
               Shift：正方形 / 水平垂直线。
               <br />
-              拖动空白处平移画布。<br/>空格 + 拖动 / 中键拖动也可平移。<br/>滚轮缩放，右下角调区域尺寸。
+              拖动空白处平移画布。
+              <br />
+              圆形手柄旋转，Shift 吸附 15°。
+              <br />
+              空格 + 拖动 / 中键拖动平移。
+              <br />
+              滚轮缩放，右下角调区域尺寸。
             </p>
             <span>ESC 取消 · Delete 删除</span>
           </div>
@@ -823,14 +945,16 @@ export default function Home() {
             onPointerUp={up}
             onPointerCancel={cancel}
             onLostPointerCapture={() => setGesture(null)}
-            onAuxClick={e => e.preventDefault()}
+            onAuxClick={(e) => e.preventDefault()}
             style={{
               cursor:
-                gesture?.type === 'pan' ? 'grabbing' : tool === 'pan' || spaceHeld
-                  ? 'grab'
-                  : tool === 'select'
+                gesture?.type === 'pan'
+                  ? 'grabbing'
+                  : tool === 'pan' || spaceHeld
                     ? 'grab'
-                    : 'crosshair',
+                    : tool === 'select'
+                      ? 'grab'
+                      : 'crosshair',
             }}
             aria-label="园区平面图绘制画布"
           >
@@ -942,7 +1066,23 @@ export default function Home() {
                 {field('位置 Y（m）', 'y', true, -1000000)}
               </div>
               {field('旋转角度（°）', 'rotation', true, -360)}
-              {!['line', 'gate'].includes(item.kind) && (
+              {item.kind !== 'line' && (
+                <div className="inspector-actions">
+                  <button
+                    onClick={() =>
+                      update({ rotation: (item.rotation + 90) % 360 })
+                    }
+                  >
+                    <RotateCw size={15} />
+                    旋转 90°
+                  </button>
+                  <button onClick={() => update({ rotation: 0 })}>归零</button>
+                </div>
+              )}
+              <p className="tiny">
+                拖动矩形上方圆形手柄旋转，按住 Shift 每 15° 吸附。
+              </p>
+              {!['line', 'gate', 'charger'].includes(item.kind) && (
                 <>
                   <div className="area-stat">
                     <strong>{(item.width * item.height).toFixed(1)}</strong>
