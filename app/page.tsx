@@ -68,6 +68,7 @@ type Gesture = {
   original?: Space;
   origin?: Point;
 };
+const BUSINESS_OPTIONS = ['未设置', '宠物', '运动', '餐饮', '办公室', '仓库', '汽车', '花店'];
 const KEY = 'courtyard-plan-v1';
 function download(name: string, body: string, type: string) {
   const url = URL.createObjectURL(new Blob([body], { type }));
@@ -1119,7 +1120,15 @@ export default function Home() {
                     {field('层高（m）', 'ceiling', true)}
                   </div>
                   <h3 className="section-title">经营信息</h3>
-                  {field('业态（如餐饮、零售、办公）', 'business')}
+                  <label className="field">业态
+                    <Select value={item.business} onValueChange={value => { if(value !== null) update({business:value}); }}>
+                      <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="选择业态" /></SelectTrigger>
+                      <SelectContent>
+                        {!BUSINESS_OPTIONS.includes(item.business) && <SelectItem value={item.business}>{item.business || '空白'}（原有值）</SelectItem>}
+                        {BUSINESS_OPTIONS.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </label>
                   <label className="field">
                     出租状态
                     <Select
