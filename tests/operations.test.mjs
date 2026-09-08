@@ -72,6 +72,7 @@ test('operations roundtrip preserves independent monthly and daily records', () 
         notes: '',
       },
     ],
+    tenders: [],
   };
   assert.deepEqual(validateOperations(JSON.parse(JSON.stringify(ops))), ops);
   const copied = validateOperations(ops);

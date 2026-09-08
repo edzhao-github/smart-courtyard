@@ -21,6 +21,10 @@ import {
   Route,
   Undo2,
   Trash2,
+  BriefcaseBusiness,
+  Image as ImageIcon,
+  Trophy,
+  Clock3,
 } from 'lucide-react';
 import {
   Select,
@@ -67,6 +71,8 @@ import {
   type Operations,
   type FinancialField,
   type MapView,
+  type RepairTender,
+  type TenderQuote,
 } from '@/lib/operations';
 import './dashboard.css';
 const money = (v: number | null | undefined) =>
@@ -85,6 +91,15 @@ const viewNames: Record<MapView, string> = {
   power: '月电费',
   utilities: '水电管线',
 };
+const blankTender = (): RepairTender => ({
+  id: '', title: '', spaceId: '', description: '', requirements: '',
+  deadline: '', desiredStartDate: '', status: '征集中', images: [], quotes: [],
+  createdAt: '', updatedAt: '',
+});
+const blankQuote = (): TenderQuote => ({
+  id: '', contractor: '', amount: 0, durationDays: 1, startDate: '',
+  notes: '', status: '待评审',
+});
 function Choice({
   value,
   onChange,
@@ -149,7 +164,12 @@ export default function Dashboard() {
     [pipeCursor, setPipeCursor] = useState<{ x: number; y: number } | null>(
       null,
     ),
-    [pipeFilter, setPipeFilter] = useState('all');
+    [pipeFilter, setPipeFilter] = useState('all'),
+    [tenderOpen, setTenderOpen] = useState(false),
+    [quoteOpen, setQuoteOpen] = useState(false),
+    [tender, setTender] = useState<RepairTender>(blankTender),
+    [quoteTenderId, setQuoteTenderId] = useState(''),
+    [quote, setQuote] = useState<TenderQuote>(blankQuote);
   const snapshot = useRef({ plan, ops });
   snapshot.current = { plan, ops };
   useEffect(() => {
@@ -440,6 +460,86 @@ export default function Dashboard() {
       setParkingOpen(false);
       setNotice('停车日报已保存');
     }
+  }
+  function openTender(existing?: RepairTender) {
+    setTender(structuredClone(existing || { ...blankTender(), spaceId: selected || spaces[0]?.id || '' }));
+    setFormError('');
+    setTenderOpen(true);
+  }
+  function submitTender(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tender.title.trim()) return setFormError('请填写招标项目名称');
+    if (!spaces.some((s) => s.id === tender.spaceId)) return setFormError('请选择需要修缮的房屋或区域');
+    if (!tender.description.trim()) return setFormError('请填写修缮基础信息');
+    const now = new Date().toISOString();
+    const next = {
+      ...tender,
+      id: tender.id || crypto.randomUUID(),
+      title: tender.title.trim(),
+      createdAt: tender.createdAt || now,
+      updatedAt: now,
+    };
+    if (persist({
+      ...ops,
+      tenders: [...ops.tenders.filter((item) => item.id !== next.id), next],
+    })) {
+      setTenderOpen(false);
+      setTab('tenders');
+      setNotice(tender.id ? '招标项目已更新' : '招标项目已创建，可以开始录入报价');
+    }
+  }
+  async function addTenderImages(files: FileList | null) {
+    if (!files?.length) return;
+    const available = 6 - tender.images.length;
+    const picked = Array.from(files).slice(0, available);
+    try {
+      const images = await Promise.all(picked.map((f) => new Promise<{ name: string; dataUrl: string }>((resolve, reject) => {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) return reject(Error('图片仅支持 JPG、PNG 或 WebP'));
+        if (f.size > 1024 * 1024) return reject(Error(`${f.name} 超过 1MB，请压缩后上传`));
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: f.name, dataUrl: String(reader.result) });
+        reader.onerror = () => reject(Error('图片读取失败'));
+        reader.readAsDataURL(f);
+      })));
+      setTender((current) => ({ ...current, images: [...current.images, ...images] }));
+      setFormError('');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : '图片上传失败');
+    }
+  }
+  function openQuote(tenderId: string, existing?: TenderQuote) {
+    setQuoteTenderId(tenderId);
+    setQuote(structuredClone(existing || blankQuote()));
+    setFormError('');
+    setQuoteOpen(true);
+  }
+  function submitQuote(e: React.FormEvent) {
+    e.preventDefault();
+    if (!quote.contractor.trim()) return setFormError('请填写承包商名称');
+    if (!(quote.amount >= 0)) return setFormError('请填写有效报价');
+    if (!Number.isInteger(quote.durationDays) || quote.durationDays < 1) return setFormError('工期需为至少 1 天的整数');
+    const target = ops.tenders.find((item) => item.id === quoteTenderId);
+    if (!target) return setFormError('招标项目不存在');
+    const nextQuote = { ...quote, id: quote.id || crypto.randomUUID(), contractor: quote.contractor.trim() };
+    const nextTender = {
+      ...target,
+      status: (target.status === '征集中' ? '评审中' : target.status) as RepairTender['status'],
+      quotes: [...target.quotes.filter((item) => item.id !== nextQuote.id), nextQuote],
+      updatedAt: new Date().toISOString(),
+    };
+    if (persist({ ...ops, tenders: ops.tenders.map((item) => item.id === target.id ? nextTender : item) })) {
+      setQuoteOpen(false);
+      setNotice(quote.id ? '报价已更新' : '承包商报价已录入');
+    }
+  }
+  function awardQuote(tenderId: string, quoteId: string) {
+    const next = ops.tenders.map((item) => item.id !== tenderId ? item : ({
+      ...item,
+      status: '已定标' as const,
+      quotes: item.quotes.map((entry) => ({ ...entry, status: entry.id === quoteId ? '已中标' as const : '未中标' as const })),
+      updatedAt: new Date().toISOString(),
+    }));
+    if (persist({ ...ops, tenders: next })) setNotice('已完成定标并标记中标方');
   }
   async function importData(f: File) {
     try {
@@ -1202,6 +1302,7 @@ export default function Dashboard() {
                 <TabsTrigger value="overview">经营分析</TabsTrigger>
                 <TabsTrigger value="ledger">区域台账</TabsTrigger>
                 <TabsTrigger value="pipes">管线清单</TabsTrigger>
+                <TabsTrigger value="tenders">修缮招标</TabsTrigger>
               </TabsList>
             </Tabs>
             <span>指标按全园区统计，地图筛选仅影响地图与台账列表。</span>
@@ -1396,7 +1497,7 @@ export default function Dashboard() {
                 <p className="manager-empty-text">没有符合筛选条件的区域</p>
               )}
             </div>
-          ) : (
+          ) : tab === 'pipes' ? (
             <section className="pipe-list">
               <p>
                 管线在「图纸编辑器」中绘制；接入状态来自图纸属性，两者独立维护。
@@ -1417,6 +1518,66 @@ export default function Dashboard() {
                 <p className="manager-empty-text">
                   尚未标注管线；不会根据建筑位置自动生成路线。
                 </p>
+              )}
+            </section>
+          ) : (
+            <section className="tender-board">
+              <div className="tender-board-head">
+                <div>
+                  <h2>修缮招标</h2>
+                  <p>发布房屋修缮需求，集中比较各承包商报价、开工日期和预计工期。</p>
+                </div>
+                <button className="primary" onClick={() => openTender()} disabled={!spaces.length}>
+                  <Plus size={16} /> 新建招标
+                </button>
+              </div>
+              <div className="tender-grid">
+                {ops.tenders.map((entry) => {
+                  const linked = spaces.find((space) => space.id === entry.spaceId);
+                  const winner = entry.quotes.find((item) => item.status === '已中标');
+                  const lowest = entry.quotes.length ? Math.min(...entry.quotes.map((item) => item.amount)) : null;
+                  return (
+                    <article className="tender-card" key={entry.id}>
+                      <div className="tender-card-top">
+                        <span className={`tender-status status-${entry.status}`}>{entry.status}</span>
+                        <button onClick={() => openTender(entry)}>编辑需求</button>
+                      </div>
+                      <h3>{entry.title}</h3>
+                      <p className="tender-space"><Building2 size={15} /> {linked?.name || '原区域已删除'}</p>
+                      <p className="tender-description">{entry.description}</p>
+                      <div className="tender-meta">
+                        <span><Clock3 size={14} /> 报价截止：{entry.deadline || '未设置'}</span>
+                        <span><ImageIcon size={14} /> {entry.images.length} 张现场图</span>
+                      </div>
+                      {entry.images.length > 0 && (
+                        <div className="tender-thumbs">
+                          {entry.images.slice(0, 4).map((image, index) => <img key={index} src={image.dataUrl} alt={`${entry.title}现场图 ${index + 1}`} />)}
+                        </div>
+                      )}
+                      <div className="quote-summary">
+                        <span><b>{entry.quotes.length}</b> 家已报价</span>
+                        <span>最低报价 <b>{lowest === null ? '—' : money(lowest)}</b></span>
+                        {winner && <span className="winner"><Trophy size={14} /> {winner.contractor}</span>}
+                      </div>
+                      {entry.quotes.length > 0 && (
+                        <div className="quote-list">
+                          {entry.quotes.slice().sort((a, b) => a.amount - b.amount).map((item) => (
+                            <div className={item.status === '已中标' ? 'quote-row awarded' : 'quote-row'} key={item.id}>
+                              <div><b>{item.contractor}</b><small>{item.startDate ? `${item.startDate} 开工 · ` : ''}{item.durationDays} 天</small></div>
+                              <strong>{money(item.amount)}</strong>
+                              <button onClick={() => openQuote(entry.id, item)}>编辑</button>
+                              {entry.status !== '已定标' && <button className="award-button" onClick={() => awardQuote(entry.id, item.id)}>定标</button>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button className="add-quote" onClick={() => openQuote(entry.id)}><Plus size={15} /> 录入承包商报价</button>
+                    </article>
+                  );
+                })}
+              </div>
+              {!ops.tenders.length && (
+                <div className="tender-empty"><BriefcaseBusiness size={38} /><h3>还没有修缮招标</h3><p>创建需求后，可持续录入不同承包商的报价和工期。</p><button className="primary" onClick={() => openTender()} disabled={!spaces.length}>新建第一个招标</button></div>
               )}
             </section>
           )}
@@ -1662,6 +1823,49 @@ export default function Dashboard() {
                 保存日报
               </button>
             </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={tenderOpen} onOpenChange={setTenderOpen}>
+        <DialogContent className="manager-dialog tender-dialog">
+          <DialogHeader>
+            <DialogTitle>{tender.id ? '编辑修缮招标' : '新建修缮招标'}</DialogTitle>
+            <DialogDescription>整理房屋现状、修缮范围、时间要求和现场图片，作为承包商报价依据。</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitTender}>
+            <div className="form-pair">
+              <label>项目名称<input required maxLength={200} value={tender.title} onChange={(e) => setTender({ ...tender, title: e.target.value })} placeholder="例如：东侧办公楼屋面防水修缮" /></label>
+              <label>关联房屋 / 区域<Choice label="关联修缮区域" value={tender.spaceId} onChange={(spaceId) => setTender({ ...tender, spaceId })} options={spaces.map((space) => [space.id, space.name])} /></label>
+            </div>
+            <label>基础信息与现状<textarea required rows={4} maxLength={5000} value={tender.description} onChange={(e) => setTender({ ...tender, description: e.target.value })} placeholder="说明漏水、墙面开裂等现状，以及大致面积和现场条件" /></label>
+            <label>修缮范围与验收要求<textarea rows={4} maxLength={5000} value={tender.requirements} onChange={(e) => setTender({ ...tender, requirements: e.target.value })} placeholder="说明材料、施工范围、质保期、验收标准等要求" /></label>
+            <div className="form-pair">
+              <label>报价截止日<input type="date" value={tender.deadline} onChange={(e) => setTender({ ...tender, deadline: e.target.value })} /></label>
+              <label>期望开工日期<input type="date" value={tender.desiredStartDate} onChange={(e) => setTender({ ...tender, desiredStartDate: e.target.value })} /></label>
+            </div>
+            <div className="form-pair">
+              <label>招标状态<Choice label="招标状态" value={tender.status} onChange={(status) => setTender({ ...tender, status: status as RepairTender['status'] })} options={['征集中', '评审中', '已定标', '已结束'].map((item) => [item, item]) as [string, string][]} /></label>
+              <label className="image-upload">现场图片（最多 6 张，每张 1MB）<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(e) => { void addTenderImages(e.target.files); e.target.value = ''; }} /></label>
+            </div>
+            {tender.images.length > 0 && <div className="upload-preview">{tender.images.map((image, index) => <div key={index}><img src={image.dataUrl} alt={image.name} /><button type="button" aria-label={`删除 ${image.name}`} onClick={() => setTender({ ...tender, images: tender.images.filter((_, i) => i !== index) })}><X size={14} /></button><small>{image.name}</small></div>)}</div>}
+            {formError && <p className="form-error" role="alert">{formError}</p>}
+            <div className="dialog-actions"><button type="button" onClick={() => setTenderOpen(false)}>取消</button><button className="primary" type="submit"><Save size={16} />保存招标</button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={quoteOpen} onOpenChange={setQuoteOpen}>
+        <DialogContent className="manager-dialog quote-dialog">
+          <DialogHeader><DialogTitle>{quote.id ? '编辑承包商报价' : '录入承包商报价'}</DialogTitle><DialogDescription>同一招标可录入多家报价，金额和工期会在列表中自动横向比较。</DialogDescription></DialogHeader>
+          <form onSubmit={submitQuote}>
+            <label>承包商 / 开发商名称<input required maxLength={200} value={quote.contractor} onChange={(e) => setQuote({ ...quote, contractor: e.target.value })} /></label>
+            <div className="form-pair">
+              <label>报价总额（元）<input required type="number" min="0" step=".01" value={quote.amount} onChange={(e) => setQuote({ ...quote, amount: Number(e.target.value) })} /></label>
+              <label>预计工期（天）<input required type="number" min="1" step="1" value={quote.durationDays} onChange={(e) => setQuote({ ...quote, durationDays: Number(e.target.value) })} /></label>
+            </div>
+            <label>预计开工日期<input type="date" value={quote.startDate} onChange={(e) => setQuote({ ...quote, startDate: e.target.value })} /></label>
+            <label>报价说明<textarea rows={4} maxLength={5000} value={quote.notes} onChange={(e) => setQuote({ ...quote, notes: e.target.value })} placeholder="可填写材料品牌、税费、质保、付款节点和不含项目" /></label>
+            {formError && <p className="form-error" role="alert">{formError}</p>}
+            <div className="dialog-actions"><button type="button" onClick={() => setQuoteOpen(false)}>取消</button><button className="primary" type="submit"><Save size={16} />保存报价</button></div>
           </form>
         </DialogContent>
       </Dialog>

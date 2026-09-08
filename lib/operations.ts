@@ -33,17 +33,42 @@ export type Pipe = {
   points: { x: number; y: number }[];
   notes: string;
 };
+export type TenderQuote = {
+  id: string;
+  contractor: string;
+  amount: number;
+  durationDays: number;
+  startDate: string;
+  notes: string;
+  status: '待评审' | '已中标' | '未中标';
+};
+export type RepairTender = {
+  id: string;
+  title: string;
+  spaceId: string;
+  description: string;
+  requirements: string;
+  deadline: string;
+  desiredStartDate: string;
+  status: '征集中' | '评审中' | '已定标' | '已结束';
+  images: { name: string; dataUrl: string }[];
+  quotes: TenderQuote[];
+  createdAt: string;
+  updatedAt: string;
+};
 export type Operations = {
   schemaVersion: 1;
   bills: Bill[];
   parking: ParkingDay[];
   pipes: Pipe[];
+  tenders: RepairTender[];
 };
 export const emptyOperations: Operations = {
   schemaVersion: 1,
   bills: [],
   parking: [],
   pipes: [],
+  tenders: [],
 };
 export function dateLocal(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -95,16 +120,21 @@ export function monthly(ops: Operations, plan: Plan, month: string) {
   >;
 }
 export function validateOperations(input: unknown): Operations {
-  const o = input as Operations;
+  const source = input as Operations;
+  const o = source && !Array.isArray(source.tenders)
+    ? { ...source, tenders: [] }
+    : source;
   if (
     !o ||
     o.schemaVersion !== 1 ||
     !Array.isArray(o.bills) ||
     !Array.isArray(o.parking) ||
     !Array.isArray(o.pipes) ||
+    !Array.isArray(o.tenders) ||
     o.bills.length > 100000 ||
     o.parking.length > 20000 ||
-    o.pipes.length > 5000
+    o.pipes.length > 5000 ||
+    o.tenders.length > 5000
   )
     throw Error('运营台账格式无效');
   const text = (v: unknown, n = 5000) => typeof v === 'string' && v.length <= n;
@@ -177,6 +207,57 @@ export function validateOperations(input: unknown): Operations {
     )
       throw Error('管线数据无效');
     seen.add(p.id);
+  }
+  seen.clear();
+  for (const tender of o.tenders) {
+    if (
+      !tender ||
+      !text(tender.id, 200) ||
+      seen.has(tender.id) ||
+      !text(tender.title, 200) ||
+      !tender.title.trim() ||
+      !text(tender.spaceId, 200) ||
+      !text(tender.description) ||
+      !text(tender.requirements) ||
+      !(tender.deadline === '' || date(tender.deadline)) ||
+      !(tender.desiredStartDate === '' || date(tender.desiredStartDate)) ||
+      !['征集中', '评审中', '已定标', '已结束'].includes(tender.status) ||
+      !Array.isArray(tender.images) ||
+      tender.images.length > 6 ||
+      tender.images.some(
+        (image) =>
+          !image ||
+          !text(image.name, 200) ||
+          typeof image.dataUrl !== 'string' ||
+          image.dataUrl.length > 1500000 ||
+          !/^data:image\/(jpeg|png|webp);base64,/.test(image.dataUrl),
+      ) ||
+      !Array.isArray(tender.quotes) ||
+      tender.quotes.length > 100 ||
+      !text(tender.createdAt, 100) ||
+      !text(tender.updatedAt, 100)
+    )
+      throw Error('修缮招标数据无效');
+    seen.add(tender.id);
+    const quoteIds = new Set<string>();
+    for (const quote of tender.quotes) {
+      if (
+        !quote ||
+        !text(quote.id, 200) ||
+        quoteIds.has(quote.id) ||
+        !text(quote.contractor, 200) ||
+        !quote.contractor.trim() ||
+        !num(quote.amount) ||
+        !num(quote.durationDays) ||
+        !Number.isInteger(quote.durationDays) ||
+        quote.durationDays < 1 ||
+        !(quote.startDate === '' || date(quote.startDate)) ||
+        !text(quote.notes) ||
+        !['待评审', '已中标', '未中标'].includes(quote.status)
+      )
+        throw Error('承包商报价数据无效');
+      quoteIds.add(quote.id);
+    }
   }
   return structuredClone(o);
 }

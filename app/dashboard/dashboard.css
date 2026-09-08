@@ -797,6 +797,53 @@
   gap: 9px;
   font-size: 13px;
 }
+.tender-board {
+  background: white;
+  padding: 22px;
+  border: 1px solid #dfe7ed;
+  border-radius: 9px;
+}
+.tender-board-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.tender-board-head h2 { margin: 0 0 7px; font-size: 18px; }
+.tender-board-head p { margin: 0; color: #8497a4; font-size: 13px; }
+.tender-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+.tender-card { border: 1px solid #dde6eb; border-radius: 10px; padding: 18px; min-width: 0; box-shadow: 0 3px 12px #29445408; }
+.tender-card-top { display: flex; justify-content: space-between; align-items: center; }
+.tender-card-top button { border: 0; padding: 3px; color: #33786f; font-size: 12px; }
+.tender-status { font-size: 11px; padding: 4px 8px; border-radius: 20px; color: #a77528; background: #fbf2df; }
+.status-已定标 { color: #17715f; background: #e5f4ee; }
+.status-已结束 { color: #71818c; background: #edf1f4; }
+.status-评审中 { color: #396e9e; background: #e8f1fa; }
+.tender-card h3 { font-size: 18px; color: #294b5e; margin: 15px 0 9px; }
+.tender-space, .tender-meta span { display: flex; align-items: center; gap: 6px; }
+.tender-space { color: #39776f; font-size: 12px; }
+.tender-description { color: #6f8592; font-size: 13px; line-height: 1.7; min-height: 44px; white-space: pre-wrap; }
+.tender-meta { display: flex; gap: 18px; flex-wrap: wrap; color: #8798a3; font-size: 11px; margin: 14px 0; }
+.tender-thumbs, .upload-preview { display: flex; gap: 8px; overflow-x: auto; margin: 12px 0; }
+.tender-thumbs img { width: 70px; height: 52px; border-radius: 6px; object-fit: cover; border: 1px solid #dce5ea; }
+.quote-summary { display: flex; flex-wrap: wrap; gap: 16px; background: #f5f8fa; border-radius: 7px; padding: 11px; font-size: 12px; color: #7b8e99; }
+.quote-summary b { color: #315869; font-size: 14px; }
+.quote-summary .winner { color: #aa7624; display: flex; align-items: center; gap: 5px; }
+.quote-list { margin-top: 11px; }
+.quote-row { display: grid; grid-template-columns: minmax(100px, 1fr) auto auto auto; align-items: center; gap: 9px; padding: 10px 0; border-bottom: 1px solid #edf1f4; }
+.quote-row > div b, .quote-row > div small { display: block; }
+.quote-row > div b { font-size: 12px; }
+.quote-row > div small { font-size: 10px; color: #8b9ca6; margin-top: 4px; }
+.quote-row > strong { font-size: 13px; color: #305e69; }
+.quote-row button { font-size: 11px; padding: 4px 7px; }
+.quote-row.awarded { background: #f0f8f4; }
+.quote-row .award-button { color: #16715f; border-color: #bcded4; }
+.add-quote { width: 100%; display: flex; justify-content: center; gap: 6px; margin-top: 13px; font-size: 12px; color: #176f64; background: #edf7f3; border-color: #d2e8df; }
+.tender-empty { text-align: center; color: #8ba0ad; padding: 55px 20px; }
+.tender-empty h3 { color: #4d6b7a; }
+.tender-empty p { font-size: 13px; }
+.tender-dialog textarea, .quote-dialog textarea { width: 100%; margin-top: 7px; border: 1px solid #d9e1e7; border-radius: 6px; padding: 10px; resize: vertical; font: inherit; color: inherit; }
+.image-upload input { padding: 6px; }
+.upload-preview > div { width: 112px; flex: 0 0 112px; position: relative; }
+.upload-preview img { width: 112px; height: 78px; object-fit: cover; border-radius: 6px; border: 1px solid #dce5ea; }
+.upload-preview button { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 50%; padding: 3px; color: white; background: #2d465ccc; }
+.upload-preview small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8497a4; margin-top: 4px; }
+.quote-dialog { max-width: 520px !important; }
 .map-instruction {
   pointer-events: none;
   width: max-content;
@@ -1064,6 +1111,7 @@
   .manager-map-canvas {
     height: 65vh;
   }
+  .tender-grid { grid-template-columns: 1fr; }
   .manager-large .manager-insights {
     display: none;
   }
@@ -1143,6 +1191,11 @@
   .manager-dialog {
     padding: 17px !important;
   }
+  .tender-board { padding: 14px; }
+  .tender-board-head { align-items: flex-start; }
+  .tender-board-head p { display: none; }
+  .quote-row { grid-template-columns: 1fr auto; }
+  .quote-row button { grid-row: 2; }
   .manager-head-actions {
     width: 100%;
   }
