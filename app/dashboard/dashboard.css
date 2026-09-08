@@ -820,12 +820,14 @@
 .tender-description { color: #6f8592; font-size: 13px; line-height: 1.7; min-height: 44px; white-space: pre-wrap; }
 .tender-meta { display: flex; gap: 18px; flex-wrap: wrap; color: #8798a3; font-size: 11px; margin: 14px 0; }
 .tender-thumbs, .upload-preview { display: flex; gap: 8px; overflow-x: auto; margin: 12px 0; }
-.tender-thumbs img { width: 70px; height: 52px; border-radius: 6px; object-fit: cover; border: 1px solid #dce5ea; }
+.tender-thumbs button { position: relative; padding: 0; border: 0; background: transparent; flex: 0 0 auto; }
+.tender-thumbs img { display: block; width: 70px; height: 52px; border-radius: 6px; object-fit: cover; border: 1px solid #dce5ea; }
+.tender-thumbs button span { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; color: white; background: #243f50cc; }
 .quote-summary { display: flex; flex-wrap: wrap; gap: 16px; background: #f5f8fa; border-radius: 7px; padding: 11px; font-size: 12px; color: #7b8e99; }
 .quote-summary b { color: #315869; font-size: 14px; }
 .quote-summary .winner { color: #aa7624; display: flex; align-items: center; gap: 5px; }
 .quote-list { margin-top: 11px; }
-.quote-row { display: grid; grid-template-columns: minmax(100px, 1fr) auto auto auto; align-items: center; gap: 9px; padding: 10px 0; border-bottom: 1px solid #edf1f4; }
+.quote-row { display: grid; grid-template-columns: minmax(100px, 1fr) auto auto auto auto; align-items: center; gap: 9px; padding: 10px 0; border-bottom: 1px solid #edf1f4; }
 .quote-row > div b, .quote-row > div small { display: block; }
 .quote-row > div b { font-size: 12px; }
 .quote-row > div small { font-size: 10px; color: #8b9ca6; margin-top: 4px; }
@@ -844,6 +846,27 @@
 .upload-preview button { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 50%; padding: 3px; color: white; background: #2d465ccc; }
 .upload-preview small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8497a4; margin-top: 4px; }
 .quote-dialog { max-width: 520px !important; }
+.quote-detail-dialog { max-width: 620px !important; }
+.quote-detail-hero { padding: 19px; border-radius: 9px; background: linear-gradient(135deg, #edf7f3, #f5f8fa); }
+.quote-detail-hero > span { float: right; color: #28766a; background: white; padding: 4px 8px; border-radius: 20px; font-size: 11px; }
+.quote-detail-hero strong { display: block; font-size: 30px; color: #205f59; }
+.quote-detail-hero small { color: #80949f; }
+.quote-detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; }
+.quote-detail-grid > div { border: 1px solid #e1e8ed; border-radius: 7px; padding: 12px; }
+.quote-detail-grid dt { color: #8799a4; font-size: 11px; }
+.quote-detail-grid dd { margin: 7px 0 0; color: #365768; font-size: 13px; }
+.quote-notes { border-top: 1px solid #e5ebef; padding-top: 13px; }
+.quote-notes h3 { font-size: 13px; color: #476575; }
+.quote-notes p { white-space: pre-wrap; color: #637b89; font-size: 13px; line-height: 1.8; }
+.quote-notes.muted p { color: #7e919d; }
+.image-preview-dialog { width: min(94vw, 1100px) !important; max-width: 1100px !important; height: min(90dvh, 850px); padding: 18px !important; background: #17232b !important; color: white !important; display: flex !important; flex-direction: column; }
+.image-preview-dialog [data-slot='dialog-description'] { color: #9cafba; }
+.image-preview-toolbar { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.image-preview-toolbar button, .image-preview-nav button { border: 1px solid #51616b; color: white; background: #283944; }
+.image-preview-toolbar span { width: 58px; text-align: center; color: #b8c5cd; font-size: 12px; }
+.image-preview-stage { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; border-radius: 8px; background: #0e171d; }
+.image-preview-stage img { max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; transition: transform .15s ease; }
+.image-preview-nav { display: flex; justify-content: space-between; }
 .map-instruction {
   pointer-events: none;
   width: max-content;
@@ -1196,6 +1219,7 @@
   .tender-board-head p { display: none; }
   .quote-row { grid-template-columns: 1fr auto; }
   .quote-row button { grid-row: 2; }
+  .quote-detail-grid { grid-template-columns: 1fr 1fr; }
   .manager-head-actions {
     width: 100%;
   }

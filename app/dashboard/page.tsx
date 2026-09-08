@@ -169,7 +169,10 @@ export default function Dashboard() {
     [quoteOpen, setQuoteOpen] = useState(false),
     [tender, setTender] = useState<RepairTender>(blankTender),
     [quoteTenderId, setQuoteTenderId] = useState(''),
-    [quote, setQuote] = useState<TenderQuote>(blankQuote);
+    [quote, setQuote] = useState<TenderQuote>(blankQuote),
+    [quoteDetail, setQuoteDetail] = useState<{ tender: RepairTender; quote: TenderQuote } | null>(null),
+    [imagePreview, setImagePreview] = useState<{ images: RepairTender['images']; index: number } | null>(null),
+    [imageZoom, setImageZoom] = useState(1);
   const snapshot = useRef({ plan, ops });
   snapshot.current = { plan, ops };
   useEffect(() => {
@@ -1551,7 +1554,7 @@ export default function Dashboard() {
                       </div>
                       {entry.images.length > 0 && (
                         <div className="tender-thumbs">
-                          {entry.images.slice(0, 4).map((image, index) => <img key={index} src={image.dataUrl} alt={`${entry.title}现场图 ${index + 1}`} />)}
+                          {entry.images.slice(0, 4).map((image, index) => <button key={index} aria-label={`放大查看 ${image.name}`} onClick={() => { setImagePreview({ images: entry.images, index }); setImageZoom(1); }}><img src={image.dataUrl} alt={`${entry.title}现场图 ${index + 1}`} /><span><Maximize2 size={13} /></span></button>)}
                         </div>
                       )}
                       <div className="quote-summary">
@@ -1565,6 +1568,7 @@ export default function Dashboard() {
                             <div className={item.status === '已中标' ? 'quote-row awarded' : 'quote-row'} key={item.id}>
                               <div><b>{item.contractor}</b><small>{item.startDate ? `${item.startDate} 开工 · ` : ''}{item.durationDays} 天</small></div>
                               <strong>{money(item.amount)}</strong>
+                              <button onClick={() => setQuoteDetail({ tender: entry, quote: item })}>详情</button>
                               <button onClick={() => openQuote(entry.id, item)}>编辑</button>
                               {entry.status !== '已定标' && <button className="award-button" onClick={() => awardQuote(entry.id, item.id)}>定标</button>}
                             </div>
@@ -1867,6 +1871,38 @@ export default function Dashboard() {
             {formError && <p className="form-error" role="alert">{formError}</p>}
             <div className="dialog-actions"><button type="button" onClick={() => setQuoteOpen(false)}>取消</button><button className="primary" type="submit"><Save size={16} />保存报价</button></div>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!quoteDetail} onOpenChange={(open) => !open && setQuoteDetail(null)}>
+        <DialogContent className="manager-dialog quote-detail-dialog">
+          {quoteDetail && <>
+            <DialogHeader><DialogTitle>{quoteDetail.quote.contractor} · 报价详情</DialogTitle><DialogDescription>{quoteDetail.tender.title} · {spaces.find((space) => space.id === quoteDetail.tender.spaceId)?.name || '原区域已删除'}</DialogDescription></DialogHeader>
+            <div className="quote-detail-hero"><span>{quoteDetail.quote.status}</span><strong>{money(quoteDetail.quote.amount)}</strong><small>报价总额</small></div>
+            <dl className="quote-detail-grid">
+              <div><dt>预计开工</dt><dd>{quoteDetail.quote.startDate || '未填写'}</dd></div>
+              <div><dt>预计工期</dt><dd>{quoteDetail.quote.durationDays} 天</dd></div>
+              <div><dt>报价状态</dt><dd>{quoteDetail.quote.status}</dd></div>
+              <div><dt>报价差额</dt><dd>{money(quoteDetail.quote.amount - Math.min(...quoteDetail.tender.quotes.map((item) => item.amount)))}</dd></div>
+            </dl>
+            <section className="quote-notes"><h3>报价说明</h3><p>{quoteDetail.quote.notes || '供应商未填写材料、税费、质保或付款节点说明。'}</p></section>
+            <section className="quote-notes muted"><h3>对应修缮要求</h3><p>{quoteDetail.tender.requirements || '招标项目未填写单独的修缮与验收要求。'}</p></section>
+            <div className="dialog-actions"><button onClick={() => { openQuote(quoteDetail.tender.id, quoteDetail.quote); setQuoteDetail(null); }}>编辑报价</button>{quoteDetail.tender.status !== '已定标' && <button className="primary" onClick={() => { awardQuote(quoteDetail.tender.id, quoteDetail.quote.id); setQuoteDetail(null); }}><Trophy size={15} />选为中标方</button>}</div>
+          </>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!imagePreview} onOpenChange={(open) => !open && setImagePreview(null)}>
+        <DialogContent className="image-preview-dialog">
+          {imagePreview && <>
+            <DialogHeader><DialogTitle>{imagePreview.images[imagePreview.index].name}</DialogTitle><DialogDescription>第 {imagePreview.index + 1} / {imagePreview.images.length} 张 · 可放大查看现场细节</DialogDescription></DialogHeader>
+            <div className="image-preview-toolbar">
+              <button aria-label="缩小图片" onClick={() => setImageZoom((value) => Math.max(.5, value - .25))}><Minus size={17} /></button>
+              <span>{Math.round(imageZoom * 100)}%</span>
+              <button aria-label="放大图片" onClick={() => setImageZoom((value) => Math.min(4, value + .25))}><Plus size={17} /></button>
+              <button onClick={() => setImageZoom(1)}>恢复大小</button>
+            </div>
+            <div className="image-preview-stage"><img style={{ transform: `scale(${imageZoom})` }} src={imagePreview.images[imagePreview.index].dataUrl} alt={imagePreview.images[imagePreview.index].name} /></div>
+            {imagePreview.images.length > 1 && <div className="image-preview-nav"><button disabled={imagePreview.index === 0} onClick={() => { setImagePreview({ ...imagePreview, index: imagePreview.index - 1 }); setImageZoom(1); }}>上一张</button><button disabled={imagePreview.index === imagePreview.images.length - 1} onClick={() => { setImagePreview({ ...imagePreview, index: imagePreview.index + 1 }); setImageZoom(1); }}>下一张</button></div>}
+          </>}
         </DialogContent>
       </Dialog>
     </div>
