@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { WorkspaceGate } from '@/components/workspace-gate';
 export const metadata: Metadata = {
   title: '园境 · 园区绘图工作台',
   description:
@@ -12,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body><WorkspaceGate>{children}</WorkspaceGate></body>
     </html>
   );
 }

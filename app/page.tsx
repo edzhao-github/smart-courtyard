@@ -1,4 +1,5 @@
 'use client';
+import { saveProjectValue, isRemoteStorage } from '@/lib/project-storage';
 import { useMeterTariff } from '@/lib/use-meter-tariff';
 import { migrateOfficeTariff } from '@/lib/plan-migrations';
 import { useState, useEffect, useRef } from 'react';
@@ -209,8 +210,8 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify(plan));
-      setSaved('已自动保存到当前浏览器');
+      saveProjectValue(KEY, JSON.stringify(plan));
+      setSaved(isRemoteStorage() ? '保存状态见顶部服务器提示' : '已自动保存到当前浏览器');
     } catch {
       setSaved('本地保存失败，请导出备份');
     }
@@ -295,7 +296,7 @@ export default function Home() {
         ...current,
         pipes: update(current.pipes),
       });
-      localStorage.setItem(OPS_KEY, JSON.stringify(next));
+      saveProjectValue(OPS_KEY, JSON.stringify(next));
       setPipes(next.pipes);
       return true;
     } catch {
@@ -746,16 +747,16 @@ export default function Home() {
       if (importedOps) {
         const oldOps = localStorage.getItem(OPS_KEY);
         if (oldOps)
-          localStorage.setItem(
+          saveProjectValue(
             `${OPS_KEY}-before-import-${Date.now()}`,
             oldOps,
           );
-        localStorage.setItem(OPS_KEY, JSON.stringify(importedOps));
+        saveProjectValue(OPS_KEY, JSON.stringify(importedOps));
         setPipes(importedOps.pipes);
       }
       const existing = localStorage.getItem(KEY);
       if (existing)
-        localStorage.setItem(`${KEY}-before-import-${Date.now()}`, existing);
+        saveProjectValue(`${KEY}-before-import-${Date.now()}`, existing);
       commit(next);
       setReady(true);
       cancel();

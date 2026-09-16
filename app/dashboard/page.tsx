@@ -1,4 +1,5 @@
 'use client';
+import { saveProjectValue, isRemoteStorage } from '@/lib/project-storage';
 import { useMeterTariff } from '@/lib/use-meter-tariff';
 import { migrateOfficeTariff } from '@/lib/plan-migrations';
 import { useState, useEffect, useRef } from 'react';
@@ -286,7 +287,7 @@ export default function Dashboard() {
   function persist(next: Operations) {
     try {
       const checked = validateOperations(next);
-      localStorage.setItem(OPS_KEY, JSON.stringify(checked));
+      saveProjectValue(OPS_KEY, JSON.stringify(checked));
       setOps(checked);
       setStorageError('');
       return true;
@@ -672,12 +673,12 @@ export default function Dashboard() {
       const oldPlan = localStorage.getItem(PLAN_KEY),
         oldOps = localStorage.getItem(OPS_KEY);
       try {
-        localStorage.setItem(PLAN_KEY, JSON.stringify(nextPlan));
-        localStorage.setItem(OPS_KEY, JSON.stringify(nextOps));
+        saveProjectValue(PLAN_KEY, JSON.stringify(nextPlan));
+        saveProjectValue(OPS_KEY, JSON.stringify(nextOps));
       } catch (e) {
-        if (oldPlan !== null) localStorage.setItem(PLAN_KEY, oldPlan);
+        if (oldPlan !== null) saveProjectValue(PLAN_KEY, oldPlan);
         else localStorage.removeItem(PLAN_KEY);
-        if (oldOps !== null) localStorage.setItem(OPS_KEY, oldOps);
+        if (oldOps !== null) saveProjectValue(OPS_KEY, oldOps);
         throw e;
       }
       setPlan(nextPlan);
@@ -817,8 +818,8 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="manager-data-note">
-          <span className="local-status">本机保存</span>
-          <span>图纸与收款保存在本机 · 研发办公室已接入电表</span>
+          <span className="local-status">{isRemoteStorage() ? '服务器保存' : '本机保存'}</span>
+          <span>{isRemoteStorage() ? '图纸与收款统一存储 · 研发办公室已接入电表' : '图纸与收款保存在本机 · 研发办公室已接入电表'}</span>
           {storageError && <strong>{storageError}</strong>}
           {tariffSyncMessage && <strong role="alert">{tariffSyncMessage}</strong>}
         </div>

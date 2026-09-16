@@ -601,3 +601,5 @@ label.field textarea {
 .editor-pipe-tools > div span {
   overflow-wrap: anywhere;
 }
+
+.workspace-status{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:9px 24px;background:#e9f3ef;color:#245e50;font-size:13px;position:sticky;top:0;z-index:100;min-height:40px}.workspace-status>div{display:flex;gap:16px}.workspace-status button{cursor:pointer;text-decoration:underline;text-underline-offset:3px}.workspace-status-error{background:#fff1e7;color:#963f1e;flex-wrap:wrap}

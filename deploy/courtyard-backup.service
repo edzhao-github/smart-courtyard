@@ -1,0 +1,10 @@
+[Unit]
+Description=Smart Courtyard daily backup
+[Service]
+Type=oneshot
+User=courtyard
+Group=courtyard
+WorkingDirectory=/opt/smart-courtyard/app
+EnvironmentFile=/opt/smart-courtyard/service.env
+ExecStart=/opt/smart-courtyard/runtime/node --experimental-strip-types server/backup.mjs
+UMask=0077

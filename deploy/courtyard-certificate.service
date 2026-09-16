@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew Courtyard IP HTTPS certificate
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/opt/smart-courtyard/certbot/bin/certbot renew --cert-name courtyard-ip --quiet --deploy-hook /opt/smart-courtyard/app/deploy/install-certificate.sh

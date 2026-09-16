@@ -1,0 +1,23 @@
+[Unit]
+Description=Smart Courtyard authenticated application
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=courtyard
+Group=courtyard
+WorkingDirectory=/opt/smart-courtyard/app
+EnvironmentFile=/opt/smart-courtyard/service.env
+ExecStart=/opt/smart-courtyard/runtime/node --experimental-strip-types server/start.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/smart-courtyard/data /opt/smart-courtyard/backups
+[Install]
+WantedBy=multi-user.target

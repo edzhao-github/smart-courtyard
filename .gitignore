@@ -41,3 +41,5 @@ next-env.d.ts
 
 # Local meter credentials and readings
 /.local-meter/
+
+/data/

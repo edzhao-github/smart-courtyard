@@ -1,0 +1,12 @@
+import { DatabaseSync, backup } from 'node:sqlite';
+import { mkdir, cp, rename } from 'node:fs/promises';
+import path from 'node:path';
+const dir=process.env.COURTYARD_DATA||'./data';
+const target=path.join(process.env.COURTYARD_BACKUPS||'./backups',new Date().toISOString().replaceAll(':','-'));
+await mkdir(target,{recursive:true,mode:0o700});
+const db=new DatabaseSync(path.join(dir,'courtyard.sqlite'));
+await backup(db,path.join(target,'courtyard.sqlite.tmp'));
+db.close();
+await rename(path.join(target,'courtyard.sqlite.tmp'),path.join(target,'courtyard.sqlite'));
+await cp(path.join(dir,'meter'),path.join(target,'meter'),{recursive:true});
+console.log(`完整备份已保存：${target}`);
