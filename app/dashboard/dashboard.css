@@ -1230,3 +1230,301 @@
     font-size: 10px;
   }
 }
+
+/* Business modules share a compact, persistent navigation surface. */
+.manager { --dash-muted: #607382; background: #f4f6f8; }
+.manager-header { height: 70px; gap: 36px; }
+.manager-body { padding: 0 28px 28px; max-width: 1800px; }
+.module-navigation { position: sticky; top: 0; z-index: 20; padding: 14px 0; background: #f4f6f8; }
+.module-navigation [data-slot="tabs-list"] { display: flex; height: auto; width: 100%; justify-content: flex-start; gap: 6px; padding: 5px; border: 1px solid #dce4e8; background: #fff; border-radius: 12px; }
+.module-navigation [data-slot="tabs-trigger"] { flex: 0 0 auto; gap: 8px; padding: 12px 22px; height: auto; border-radius: 8px; color: #536975; font-size: 14px; }
+.module-navigation [data-slot="tabs-trigger"][data-active] { background: #e7f2ee; color: #155f50; box-shadow: none; }
+.manager-title { padding: 12px 0 4px; }
+.manager-title h1 { font-size: 28px; font-weight: 650; margin: 5px 0 8px; }
+.manager-eyebrow { color: #536975; font-size: 13px; letter-spacing: 0; }
+.manager-title p { color: #607382; line-height: 1.6; }
+.manager-data-note { align-items: center; gap: 10px; padding: 16px 0 20px; }
+.manager-data-note span { color: #607382; }
+.manager-data-note .local-status { color: #246b57; background: #e5eee9; padding: 4px 9px; border-radius: 5px; white-space: nowrap; }
+.manager-workspace { grid-template-columns: minmax(0, 1fr) 310px; }
+.manager-map-canvas { height: clamp(420px, 57vh, 680px); }
+.manager-body:not(.module-overview) > .kpi-grid,
+.manager-body:not(.module-overview) > .manager-workspace { display: none; }
+.manager-body:not(.module-overview) > .manager-bottom { margin-top: 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid #e1e7ed; }
+.section-heading h2 { margin: 0; font-size: 17px; font-weight: 650; }
+.section-heading > span { font-size: 12px; color: #607382; }
+.ledger-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 18px 22px; border-bottom: 1px solid #e1e7ed; }
+.ledger-filters input { flex: 1; min-width: 180px; max-width: 360px; }
+.ledger-table th { color: #506574; background: #f6f8fa; white-space: nowrap; padding-top: 15px; padding-bottom: 15px; }
+.ledger-table td { padding-top: 16px; padding-bottom: 16px; }
+.manager .kpi-card small, .manager .tiny, .manager .insight-card > small { color: #607382; }
+.manager button:focus-visible, .manager a:focus-visible, .manager input:focus-visible { outline: 3px solid #2b8973; outline-offset: 3px; }
+.manager-large .module-navigation { display: none; }
+@media (max-width: 1100px) {
+  .manager-workspace { grid-template-columns: minmax(0, 1fr) 270px; gap: 14px; }
+  .manager-header { gap: 20px; }
+}
+@media (max-width: 900px) {
+  .manager-header { height: auto; }
+  .manager-workspace { grid-template-columns: 1fr; }
+  .manager-body { padding: 0 16px 24px; }
+  .module-navigation [data-slot="tabs-trigger"] { flex: 1; padding: 12px 10px; }
+}
+@media (max-width: 600px) {
+  .module-navigation { padding: 10px 0; }
+  .module-navigation [data-slot="tabs-trigger"] { font-size: 12px; gap: 5px; padding: 10px 5px; }
+  .module-navigation [data-slot="tabs-trigger"] svg { display: none; }
+  .manager-body { padding: 0 12px 20px; }
+  .manager-title h1 { font-size: 25px; }
+  .manager-data-note { align-items: flex-start; flex-wrap: nowrap; line-height: 1.6; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 6px; padding: 16px; }
+  .ledger-filters { padding: 14px; }
+  .ledger-filters input { max-width: none; flex-basis: 100%; }
+}
+.module-pipes .manager-period, .module-tenders .manager-period { display: none; }
+.manager-empty-text > button { margin: 14px auto 0; }
+
+.room-tenant { margin: -4px 0 14px; color: #607382; font-size: 14px; }
+.room-monthly { border-top: 1px solid #dfe7ed; margin-top: 20px; padding-top: 16px; }
+.room-monthly h4 { margin: 0 0 12px; font-size: 15px; }
+.room-bill-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 9px 0; font-size: 14px; }
+.room-bill-row > :not(:first-child) { text-align: right; overflow-wrap: anywhere; }
+.room-bill-row b { font-weight: 500; }
+.room-bill-labels { color: #607382; font-size: 13px; border-bottom: 1px solid #e4ebef; }
+.room-monthly p { font-size: 13px; color: #607382; line-height: 1.6; }
+.room-notes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 140px; overflow: auto; }
+.bill-dialog { max-width: 960px !important; }
+.bill-dialog label { font-size: 14px; color: #415968; }
+.bill-dialog input { height: 42px; font-size: 16px; }
+.bill-context { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; background: #edf4f1; border-radius: 8px; padding: 13px 16px; margin-top: 18px; font-size: 14px; color: #416858; }
+.bill-context b { margin-left: 8px; }
+.bill-dialog .bill-groups section { border: 1px solid #dce5eb; padding: 18px; background: #f7f9fb; }
+.bill-dialog .bill-groups h3 { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.bill-rate { font-size: 13px; color: #607382; min-height: 22px; margin: 12px 0; }
+.bill-dialog .bill-groups button { font-size: 13px; min-height: 38px; }
+.bill-review { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 18px; margin-top: 22px; border: 1px solid #cfe0d9; background: #f0f7f4; border-radius: 10px; }
+.bill-review span { display: block; font-size: 13px; color: #526e62; }
+.bill-review strong { display: block; margin-top: 8px; font-size: 22px; color: #205847; overflow-wrap: anywhere; }
+.bill-review p { grid-column: 1/-1; margin: 4px 0 0; font-size: 13px; color: #526e62; }
+.bill-review .bill-issue { color: #a2322c; }
+.bill-dialog .dialog-actions { position: sticky; bottom: -25px; background: white; padding: 15px 0; border-top: 1px solid #e0e7eb; z-index: 2; }
+.bill-dialog .dialog-actions button { min-height: 42px; font-size: 14px; }
+@media (max-width: 700px) {
+  .bill-dialog .bill-groups { grid-template-columns: 1fr; }
+  .bill-review { gap: 8px; padding: 12px; }
+  .bill-review strong { font-size: 17px; }
+  .bill-dialog .dialog-actions { bottom: -17px; }
+}
+
+/* Give the spatial overview priority over financial summaries. */
+.module-overview .manager-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
+.module-overview .manager-map-canvas { height: max(540px, 68dvh); }
+.module-overview .manager-insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr) 320px; }
+.module-overview .has-selection .manager-insights { display: flex; flex-direction: column; }
+.module-overview .has-selection .manager-insights > :not(.selected-card) { display: none; }
+.module-overview > .kpi-grid { margin: 22px 0; }
+.module-overview .manager-map-controls button { min-height: 38px; min-width: 38px; font-size: 14px; }
+.manager-large { position: fixed; inset: 0; z-index: 40; overflow: auto; }
+.manager-large .manager-body { padding: 10px; max-width: none; height: 100%; }
+.manager-large .module-overview > .kpi-grid { display: none; }
+.manager-large .manager-workspace { height: 100%; }
+.manager-large .manager-map-panel { display: flex; flex-direction: column; height: 100%; }
+.manager-large .module-overview .manager-map-canvas { flex: 1; min-height: 180px; height: auto; }
+.manager-large .manager-map-heading { padding: 12px 18px; }
+.manager-large .manager-map-heading p { display: none; }
+.manager-large .manager-map-filters { padding-top: 8px; padding-bottom: 8px; }
+.manager-large .manager-insights { display: none; }
+.manager-large .has-selection .manager-insights { display: flex; max-height: 100%; overflow: auto; }
+.manager-large .map-legend { max-height: 66px; overflow: auto; }
+@media (max-width: 900px) {
+  .module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr); }
+  .module-overview .manager-insights { grid-template-columns: 1fr; }
+  .manager-large .has-selection .manager-insights { position: absolute; right: 16px; top: 180px; width: min(300px, calc(100vw - 32px)); max-height: calc(100dvh - 260px); z-index: 5; }
+  .module-overview .manager-map-controls span { display: none; }
+  .module-overview .manager-map-controls { max-width: calc(100% - 32px); flex-wrap: wrap; }
+}
+
+.area-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 16px; border-top: 1px solid #e2e8ee; }
+.area-navigation > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.area-navigation button { font-size: 14px; min-height: 36px; }
+.area-navigation button[aria-pressed='true'] { background: #1b6557; color: white; border-color: #1b6557; }
+.area-navigation > span { font-size: 13px; color: #607382; }
+.map-and-list { display: grid; grid-template-columns: minmax(0, 1fr); height: max(540px, 68dvh); min-height: 0; }
+.map-and-list.list-open { grid-template-columns: 230px minmax(0, 1fr); }
+.module-overview .map-and-list .manager-map-canvas { min-width: 0; height: 100%; min-height: 0; }
+.area-list { min-height: 0; overflow: auto; background: #fff; border-top: 1px solid #e2e8ee; border-right: 1px solid #e2e8ee; padding: 10px; }
+.area-list-hint, .area-list-empty { color: #607382; font-size: 13px; line-height: 1.7; margin: 6px 4px 12px; }
+.area-list > button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left; width: 100%; padding: 13px 12px; margin-bottom: 7px; border: 1px solid transparent; border-radius: 8px; background: #f5f7f9; }
+.area-list > button[aria-pressed='true'] { border-color: #277966; background: #e8f3ee; box-shadow: inset 3px 0 #277966; }
+.area-list-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.area-list-name svg { flex-shrink: 0; }
+.area-list-meta, .area-list-tenant { font-size: 13px; color: #526b79; overflow-wrap: anywhere; }
+.area-list-due { font-size: 13px; color: #a14a20; }
+.manager-large .map-and-list { flex: 1; height: auto; min-height: 0; }
+@media (max-width: 700px) {
+  .map-and-list.list-open { grid-template-columns: minmax(0, 1fr); grid-template-rows: 160px minmax(0, 1fr); }
+  .area-list { display: flex; gap: 8px; overflow: auto; border-right: 0; border-bottom: 1px solid #e2e8ee; }
+  .area-list > button { flex: 0 0 180px; margin: 0; }
+  .area-list-hint { display: none; }
+  .area-navigation { gap: 8px; padding: 10px; }
+  .area-navigation > span { width: 100%; }
+}
+.meter-panel { margin-top: 18px; padding: 16px; border: 1px solid #cbded5; border-radius: 10px; background: #f0f7f3; }
+.meter-heading, .meter-heading h4 { display: flex; align-items: center; gap: 8px; }
+.meter-heading { justify-content: space-between; }
+.meter-heading h4 { margin: 0; font-size: 15px; }
+.meter-heading button { font-size: 13px; padding: 6px; }
+.meter-reading { margin: 18px 0 12px; }
+.meter-reading strong { font-size: 32px; color: #205e4d; overflow-wrap: anywhere; }
+.meter-reading > span { display: block; font-size: 13px; color: #526b5d; }
+.meter-panel p, .meter-panel small { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.meter-panel .meter-warning { color: #9d501f; }
+.meter-panel summary { cursor: pointer; font-size: 14px; margin-top: 16px; }
+.meter-history { max-height: 240px; overflow: auto; }
+.meter-history > div { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid #d8e5dd; font-size: 13px; }
+.meter-help { color: #607382; margin-bottom: 0; }
+.meter-billing { background: #fff; border: 1px solid #d5e3dc; border-radius: 8px; padding: 14px; margin: 16px 0; }
+.meter-billing h4 { margin: 0 0 12px; font-size: 15px; }
+.meter-panel .meter-billing dl { display: block; margin: 0; }
+.meter-billing dl > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 7px 0; }
+.meter-billing dt, .meter-billing dd { font-size: 14px; margin: 0; }
+.meter-billing-total { border-top: 1px solid #e0e8e3; margin-top: 6px; }
+.meter-billing .meter-billing-total dd { font-size: 22px; font-weight: 650; color: #205e4d; }
+.meter-billing p { color: #607382; margin-bottom: 0; }
+
+.bill-dialog { max-width: 640px !important; }
+.bill-category-tabs { margin-top: 20px; }
+.bill-category-tabs [data-slot='tabs-list'] { width: 100%; height: 48px; padding: 4px; background: #edf2f5; }
+.bill-category-tabs [data-slot='tabs-trigger'] { flex: 1; font-size: 15px; gap: 8px; }
+.bill-dialog .bill-simple { grid-template-columns: 1fr; margin-top: 12px; }
+.bill-dialog .bill-simple section { background: white; padding: 0; border: 0; }
+.bill-simple h3 { display: none !important; }
+.bill-simple > section > label { font-size: 15px; margin-top: 16px; }
+.bill-simple > section > label input { height: 50px; font-size: 24px; font-weight: 550; }
+.bill-source-note { color: #526979; font-size: 14px; line-height: 1.6; margin: 8px 0; }
+.bill-payment-shortcuts { display: flex; gap: 10px; }
+.bill-dialog .bill-payment-shortcuts button { width: auto; flex: 1; font-size: 14px; }
+.bill-current-balance { display: flex; align-items: center; justify-content: space-between; margin: 18px 0; padding: 14px 16px; background: #eaf4ef; border-radius: 8px; font-size: 14px; }
+.bill-current-balance strong { font-size: 23px; color: #205e4d; }
+.bill-calculation, .bill-extra { border-top: 1px solid #e0e7eb; margin-top: 14px; padding-top: 14px; }
+.bill-calculation summary, .bill-extra summary { cursor: pointer; color: #4d6575; font-size: 14px; padding: 4px 0; }
+.bill-save-summary { color: #536975; font-size: 13px; line-height: 1.7; margin-top: 18px; }
+.bill-dialog .dialog-actions { margin-top: 12px; }
+.bill-dialog .dialog-actions .primary { min-width: 160px; }
+@media(max-width: 600px) { .bill-dialog .form-pair { grid-template-columns: 1fr 1fr; gap: 10px; } }
+.bill-dialog form[hidden] { display: none; }
+.bill-page-tabs [data-slot='tabs-list'] { width: 100%; height: 44px; }
+.bill-page-tabs [data-slot='tabs-trigger'] { flex: 1; gap: 7px; font-size: 15px; }
+.bill-history { min-height: 300px; }
+.bill-history > [data-slot='tabs'] { margin: 8px 0 14px; }
+.bill-history [data-slot='tabs-trigger'] { font-size: 14px; }
+.history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.bill-dialog .history-toolbar label { margin: 0; }
+.history-toolbar select { border: 1px solid #d6e0e6; padding: 8px; border-radius: 6px; margin-left: 8px; background: #fff; }
+.history-toolbar > span, .history-note { font-size: 13px; color: #607382; line-height: 1.7; }
+.history-table { overflow-x: auto; }
+.history-table table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.history-table th { padding: 12px 8px; background: #f2f6f8; font-weight: 500; color: #526978; }
+.history-table td { padding: 14px 8px; border-bottom: 1px solid #e1e8ec; }
+.history-table small { display: block; min-width: 125px; margin-top: 5px; font-size: 12px; color: #607382; }
+.history-table button { white-space: nowrap; font-size: 13px; }
+.history-record { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 0; border-bottom: 1px solid #e1e8ec; font-size: 14px; }
+.history-record small { display: block; font-size: 12px; color: #607382; line-height: 1.7; margin-top: 6px; }
+.history-record strong { white-space: nowrap; color: #246b57; }
+.history-empty { padding: 35px 12px; text-align: center; color: #607382; font-size: 14px; line-height: 1.8; }
+
+/* Overview hierarchy: spatial context, room summary, then detailed records. */
+.manager { font-size: 14px; color: #243e50; }
+.manager-body { max-width: 2200px; }
+.manager-header { padding-inline: 28px; }
+.module-navigation [data-slot='tabs-trigger'] { border: 0; }
+.module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr) 390px; gap: 18px; }
+.module-overview .manager-title { padding-top: 2px; }
+.module-overview .manager-title h1 { font-size: 24px; }
+.module-overview .manager-data-note { padding: 10px 0 16px; }
+.manager-map-heading h2 { font-size: 17px; }
+.manager-map-heading p, .manager-map-heading h2 span { font-size: 13px; color: #607382; }
+.manager-map-tabs button { font-size: 14px; }
+.manager-map-filters { padding-block: 10px; }
+.area-navigation { padding-block: 8px; }
+.map-and-list.list-open { grid-template-columns: 210px minmax(0, 1fr); }
+.area-list > button { padding: 11px; }
+.area-list-name { font-size: 14px; }
+.module-overview .has-selection .manager-insights { position: sticky; top: 84px; }
+.selected-card { padding: 20px; border-color: #d9e2e8; box-shadow: 0 6px 24px #18354908; }
+.selected-card .card-heading { margin-bottom: 10px; }
+.selected-card .card-heading h2 { color: #607382; font-size: 13px; font-weight: 500; }
+.selected-card h3 { font-size: 24px; line-height: 1.4; margin: 0 0 6px; }
+.selected-card .room-tenant { margin: 0 0 12px; font-size: 14px; }
+.selected-card .detail-tags { margin: 0 0 16px; }
+.selected-card .detail-tags span { font-size: 12px; padding: 4px 8px; }
+.room-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid #e3e9ed; }
+.room-facts span { display: block; font-size: 13px; color: #607382; }
+.room-facts strong { display: block; margin-top: 6px; font-size: 21px; font-weight: 600; }
+.room-facts small { font-size: 13px; font-weight: 400; }
+.selected-card .meter-panel { background: #f1f7f4; border: 0; padding: 14px 16px; margin-top: 16px; }
+.meter-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 14px; }
+.meter-summary-grid span { font-size: 13px; color: #526c60; }
+.meter-summary-grid strong { display: block; font-size: 26px; line-height: 1.4; color: #205e4d; }
+.meter-summary-grid small { font-size: 13px; font-weight: 400; }
+.meter-panel .meter-sync-time { margin: 8px 0 0; color: #607382; font-size: 12px; }
+.meter-panel .meter-expanded > summary { font-size: 13px; margin-top: 10px; color: #3b6b58; }
+.meter-expanded .meter-billing { padding: 10px; }
+.selected-card .room-monthly { margin-top: 16px; padding-top: 0; border-top: 0; }
+.room-monthly h4 { font-size: 15px; margin-bottom: 8px; }
+.room-monthly .room-bill-row { padding: 7px 0; }
+.room-more { border-top: 1px solid #e0e7eb; padding-top: 12px; margin-top: 12px; }
+.room-more summary { cursor: pointer; font-size: 13px; color: #607382; }
+.room-actions { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; margin-top: 16px; }
+.room-actions button { justify-content: center; min-height: 42px; font-size: 14px; padding: 8px; }
+.manager-large .module-overview .has-selection .manager-insights { position: static; }
+@media (max-width: 1200px) { .module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr) 340px; } .map-and-list.list-open { grid-template-columns: 180px minmax(0, 1fr); } }
+@media (max-width: 980px) {
+  .module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr); }
+  .module-overview .has-selection .manager-insights { position: static; }
+  .selected-card { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+  .selected-card > .card-heading, .selected-card > h3, .selected-card > .room-tenant, .selected-card > .detail-tags, .selected-card > .room-actions { grid-column: 1/-1; }
+  .manager-large .has-selection .selected-card { display: block; }
+}
+@media (max-width: 700px) {
+  .map-and-list.list-open { grid-template-columns: minmax(0, 1fr); }
+  .selected-card { display: block; }
+  .manager-body { padding-inline: 12px; }
+}
+
+/* Each charge has the same readable contract: status, amount, collection, history. */
+.module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr) 470px; }
+.room-fees { margin-top: 18px; }
+.room-fees-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.room-fees-heading h4 { margin: 0; font-size: 16px; }
+.room-fees-heading > span { font-size: 13px; color: #657987; }
+.room-fees-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.room-fee-card { border: 1px solid #dde5eb; border-radius: 10px; padding: 14px; background: #fff; min-width: 0; box-shadow: 0 2px 6px #17354b04; }
+.room-fee-card header { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.room-fee-card h5 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 15px; font-weight: 650; }
+.fee-rent h5 svg { color: #5b69a1; }.fee-water h5 svg { color: #3183aa; }.fee-power h5 svg { color: #ab7b1e; }.fee-property h5 svg { color: #527e64; }
+.fee-status { font-size: 12px; white-space: nowrap; }.fee-status.paid { color: #23745c; }.fee-status.due { color: #a55429; }.fee-status.empty { color: #71828e; }
+.room-fee-card .fee-period { font-size: 12px; color: #637886; line-height: 1.6; min-height: 20px; margin: 10px 0 14px; }
+.fee-main > span { display: block; color: #526979; font-size: 13px; }
+.fee-main strong { display: block; font-size: 25px; font-weight: 650; line-height: 1.35; margin-top: 4px; overflow-wrap: anywhere; }
+.fee-amounts { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #607382; margin: 12px 0; }
+.fee-amounts b { display: block; font-size: 14px; font-weight: 500; color: #304d60; margin-top: 3px; overflow-wrap: anywhere; }
+.room-fee-card footer { display: flex; justify-content: space-between; border-top: 1px solid #e6ecf0; padding-top: 8px; gap: 8px; }
+.room-fee-card footer button { border: 0; padding: 5px 0; background: transparent; color: #286a59; font-size: 13px; }
+.room-device-details { margin-top: 16px; border-top: 1px solid #e1e8ed; padding-top: 12px; }
+.room-device-details > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #526978; }
+.room-device-details > summary::after { content: '展开'; margin-left: auto; }.room-device-details[open] > summary::after { content: '收起'; }
+.selected-card .room-actions { display: none; }
+@media(max-width: 1250px) {
+  .module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr) 410px; }
+  .room-fee-card { padding: 12px; }.fee-main strong { font-size: 22px; }
+}
+@media(max-width: 980px) {
+  .module-overview .manager-workspace.has-selection { grid-template-columns: minmax(0, 1fr); }
+  .selected-card { display: block; }
+  .room-fees-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+@media(max-width: 700px) { .room-fees-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media(max-width: 380px) { .room-fees-grid { grid-template-columns: 1fr; } }

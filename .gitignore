@@ -38,3 +38,6 @@ next-env.d.ts
 /work/
 /.pnpm-store/
 *.tsbuildinfo
+
+# Local meter credentials and readings
+/.local-meter/

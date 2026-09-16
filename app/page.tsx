@@ -1,4 +1,6 @@
 'use client';
+import { useMeterTariff } from '@/lib/use-meter-tariff';
+import { migrateOfficeTariff } from '@/lib/plan-migrations';
 import { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -190,12 +192,13 @@ export default function Home() {
     }
     return () => controller.abort();
   }, []);
+  const tariffSyncMessage = useMeterTariff(plan, ready);
   const item = plan.elements.find((e) => e.id === selected),
     scale = 7 * zoom;
   useEffect(() => {
     try {
       const s = localStorage.getItem(KEY);
-      if (s) setPlan(validatePlan(JSON.parse(s)));
+      if (s) setPlan(migrateOfficeTariff(validatePlan(JSON.parse(s))));
       setReady(true);
     } catch {
       setSaved(
@@ -1620,6 +1623,8 @@ export default function Home() {
                   <div className="pair">
                     {field('水价（元 / m³）', 'waterRate', true)}
                     {field('电价（元 / kWh）', 'electricityRate', true)}
+                    {item.name.trim() === '研发办公室' && <p style={{ fontSize: 12, lineHeight: 1.6, color: '#607382' }}>新电价以平台最新抄表读数为分界，之前用电保留旧价。改价前请先完成抄表。</p>}
+                    {tariffSyncMessage && <p role="alert">{tariffSyncMessage}</p>}
                   </div>
                 </>
               )}

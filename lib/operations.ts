@@ -10,9 +10,15 @@ export const financialFields = [
   'powerUsage',
   'powerDue',
   'powerPaid',
+  'propertyDue',
+  'propertyPaid',
 ] as const;
 export type FinancialField = (typeof financialFields)[number];
 export type Bill = {
+  powerReceipts?: { amount: number; at: string; kind: 'opening' | 'payment' }[];
+  rentMonths?: 1 | 12;
+  rentStartMonth?: string;
+  powerMeter?: { address: string; startKwh: number; endKwh: number; readingAt: string };
   spaceId: string;
   month: string;
   dueDate: string;
@@ -96,7 +102,7 @@ export function sumKnown(values: (number | null | undefined)[]): number | null {
 }
 export function balance(b: Bill): number | null {
   return sumKnown(
-    (['rent', 'water', 'power'] as const).map((k) =>
+    (['rent', 'water', 'power', 'property'] as const).map((k) =>
       b[`${k}Due`] === null || b[`${k}Paid`] === null
         ? null
         : Math.max(0, Math.round((b[`${k}Due`]! - b[`${k}Paid`]!) * 100) / 100),
@@ -121,7 +127,7 @@ export function monthly(ops: Operations, plan: Plan, month: string) {
 }
 export function validateOperations(input: unknown): Operations {
   const source = input as Operations;
-  const o = source && !Array.isArray(source.tenders)
+  let o = source && !Array.isArray(source.tenders)
     ? { ...source, tenders: [] }
     : source;
   if (
@@ -137,6 +143,10 @@ export function validateOperations(input: unknown): Operations {
     o.tenders.length > 5000
   )
     throw Error('运营台账格式无效');
+  o = { ...o, bills: o.bills.map((bill) => ({ ...bill,
+    propertyDue: bill?.propertyDue === undefined ? null : bill.propertyDue,
+    propertyPaid: bill?.propertyPaid === undefined ? null : bill.propertyPaid,
+  })) };
   const text = (v: unknown, n = 5000) => typeof v === 'string' && v.length <= n;
   const num = (v: unknown) =>
     v === null ||
@@ -157,10 +167,28 @@ export function validateOperations(input: unknown): Operations {
       financialFields.some((k) => !num(b[k]))
     )
       throw Error('账单包含无效日期或金额');
+    if (b.powerReceipts !== undefined && (!Array.isArray(b.powerReceipts) || b.powerReceipts.length > 10000 || b.powerReceipts.some((r) => !r || !Number.isFinite(r.amount) || Math.abs(r.amount) > 1e12 || !text(r.at, 100) || !['opening', 'payment'].includes(r.kind)))) throw Error('电费收款记录无效');
+    if (b.rentMonths !== undefined && b.rentMonths !== 1 && b.rentMonths !== 12) throw Error('租金付款周期无效');
+    if (b.rentStartMonth !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(b.rentStartMonth)) throw Error('租金开始月份无效');
+    if (b.powerMeter) {
+      const meter = b.powerMeter;
+      if (!text(meter.address, 100) || !text(meter.readingAt, 100) || typeof meter.startKwh !== 'number' || typeof meter.endKwh !== 'number'
+        || !num(meter.startKwh) || !num(meter.endKwh) || meter.endKwh < meter.startKwh
+        || b.powerUsage === null || Math.abs(b.powerUsage - (meter.endKwh - meter.startKwh)) > 0.001) throw Error('电表账单读数区间无效');
+      if (o.bills.some((other) => other !== b && other.powerMeter?.address === meter.address
+        && other.powerMeter.startKwh < meter.endKwh && other.powerMeter.endKwh > meter.startKwh)) throw Error('电表用量与其他账单重复，请核对读数区间');
+    }
+    if ((b.rentDue ?? 0) > 0) {
+      const monthIndex = (value: string) => { const [y, m] = value.split('-').map(Number); return y * 12 + m - 1; };
+      const start = monthIndex(b.rentStartMonth || b.month), end = start + (b.rentMonths || 1);
+      if (o.bills.some((other) => other !== b && other.spaceId === b.spaceId && (other.rentDue ?? 0) > 0
+        && monthIndex(other.rentStartMonth || other.month) < end
+        && monthIndex(other.rentStartMonth || other.month) + (other.rentMonths || 1) > start)) throw Error('租金覆盖月份与已有账单重叠，请核对年付账单');
+    }
     const key = `${b.spaceId}:${b.month}`;
     if (seen.has(key)) throw Error('同一区域同月存在重复账单');
     seen.add(key);
-    for (const k of ['rent', 'water', 'power'] as const) {
+    for (const k of ['rent', 'water', 'power', 'property'] as const) {
       if (
         b[`${k}Paid`] !== null &&
         (b[`${k}Due`] === null || b[`${k}Paid`]! > b[`${k}Due`]!)

@@ -121,3 +121,31 @@ test('heat map distinguishes zero from missing and caps maximum', () => {
   assert.equal(heat(200, 100, 'power'), heat(100, 100, 'power'));
   assert.notEqual(heat(0, 100, 'water'), heat(100, 100, 'water'));
 });
+
+test('annual rent retains coverage and prevents duplicate monthly charging', () => {
+  const annual = { ...blankBill('a', '2026-09'), rentMonths: 12, rentStartMonth: '2026-09', rentDue: 12000, rentPaid: 12000 };
+  const ops = { ...emptyOperations, bills: [annual] };
+  assert.equal(validateOperations(JSON.parse(JSON.stringify(ops))).bills[0].rentMonths, 12);
+  assert.throws(() => validateOperations({ ...ops, bills: [annual, { ...blankBill('a', '2027-08'), rentDue: 1000 }] }), /重叠/);
+  assert.doesNotThrow(() => validateOperations({ ...ops, bills: [annual, { ...blankBill('a', '2027-09'), rentDue: 1000 }] }));
+  assert.doesNotThrow(() => validateOperations({ ...ops, bills: [annual, { ...blankBill('a', '2026-10'), powerDue: 12 }] }));
+});
+test('meter bill intervals reject overlapping usage and accept adjacent readings', () => {
+  const first = { ...blankBill('a', '2026-09'), powerUsage: 1.79, powerDue: 1.79, powerMeter: { address: 'meter', startKwh: 0, endKwh: 1.79, readingAt: '2026-09-15 10:33:28' } };
+  const next = { ...blankBill('a', '2026-10'), powerUsage: 1, powerDue: 2, powerMeter: { address: 'meter', startKwh: 1.79, endKwh: 2.79, readingAt: '2026-10-01 00:00:00' } };
+  assert.doesNotThrow(() => validateOperations({ ...emptyOperations, bills: [first, next] }));
+  assert.throws(() => validateOperations({ ...emptyOperations, bills: [first, { ...next, powerUsage: 1.79, powerMeter: { ...next.powerMeter, startKwh: 1 } }] }), /重复/);
+});
+
+test('legacy bills migrate property fees without inventing income; property fees aggregate', () => {
+  const old = { ...blankBill('a', '2026-09') };
+  delete old.propertyDue; delete old.propertyPaid;
+  const migrated = validateOperations({ ...emptyOperations, bills: [old] });
+  assert.equal(migrated.bills[0].propertyDue, null);
+  assert.equal(migrated.bills[0].propertyPaid, null);
+  const bill = { ...migrated.bills[0], propertyDue: 120, propertyPaid: 20 };
+  const ops = validateOperations({ ...emptyOperations, bills: [bill] });
+  assert.equal(balance(ops.bills[0]), 100);
+  assert.equal(monthly(ops, { elements: [{id:'a'}] }, '2026-09').propertyPaid, 20);
+  assert.throws(() => validateOperations({ ...emptyOperations, bills: [{ ...bill, propertyPaid: 121 }] }));
+});

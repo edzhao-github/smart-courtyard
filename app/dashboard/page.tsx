@@ -1,4 +1,6 @@
 'use client';
+import { useMeterTariff } from '@/lib/use-meter-tariff';
+import { migrateOfficeTariff } from '@/lib/plan-migrations';
 import { useState, useEffect, useRef } from 'react';
 import {
   Map,
@@ -75,6 +77,11 @@ import {
   type TenderQuote,
 } from '@/lib/operations';
 import './dashboard.css';
+import { RoomFeeCards } from '@/components/room-fee-cards';
+import { BillHistory } from '@/components/bill-history';
+import { syncMeterLedger, type MeterSnapshot } from '@/lib/meter-ledger';
+import { calculateMeterCharge, type Tariff } from '@/lib/meter-billing';
+import { MeterPanel } from '@/components/meter-panel';
 const money = (v: number | null | undefined) =>
   v === null || v === undefined
     ? '未录入'
@@ -90,6 +97,12 @@ const viewNames: Record<MapView, string> = {
   water: '月水费',
   power: '月电费',
   utilities: '水电管线',
+};
+const sections: Record<string, { title: string; description: string }> = {
+  overview: { title: '园区总览', description: '查看空间分布、收款进度与待处理事项。' },
+  ledger: { title: '区域台账', description: '按区域管理每月租金、水电用量与收款记录。' },
+  pipes: { title: '水电管线', description: '查看园区管线路线与配套设施。' },
+  tenders: { title: '修缮招标', description: '管理修缮需求，比较报价并跟进中标结果。' },
 };
 const blankTender = (): RepairTender => ({
   id: '', title: '', spaceId: '', description: '', requirements: '',
@@ -114,7 +127,7 @@ function Choice({
   return (
     <Select value={value} onValueChange={(v) => v !== null && onChange(v)}>
       <SelectTrigger aria-label={label}>
-        <SelectValue />
+        <SelectValue>{options.find(([key]) => key === value)?.[1] ?? value}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map(([v, t]) => (
@@ -146,12 +159,18 @@ export default function Dashboard() {
     [day, setDay] = useState(dateLocal()),
     [selected, setSelected] = useState(''),
     [query, setQuery] = useState(''),
+    [areaListOpen, setAreaListOpen] = useState(true),
+    [areaFilter, setAreaFilter] = useState('all'),
     [business, setBusiness] = useState('all'),
     [status, setStatus] = useState('all'),
     [notice, setNotice] = useState(''),
     [large, setLarge] = useState(false),
     [tab, setTab] = useState('overview'),
     [billOpen, setBillOpen] = useState(false),
+    [billCategory, setBillCategory] = useState('rent'),
+    [billView, setBillView] = useState('edit'),
+    [meterBillMessage, setMeterBillMessage] = useState(''),
+    [meterBillLoading, setMeterBillLoading] = useState(false),
     [parkingOpen, setParkingOpen] = useState(false),
     [bill, setBill] = useState<Bill>(blankBill('', month)),
     [income, setIncome] = useState(''),
@@ -173,6 +192,8 @@ export default function Dashboard() {
     [quoteDetail, setQuoteDetail] = useState<{ tender: RepairTender; quote: TenderQuote } | null>(null),
     [imagePreview, setImagePreview] = useState<{ images: RepairTender['images']; index: number } | null>(null),
     [imageZoom, setImageZoom] = useState(1);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  const tariffSyncMessage = useMeterTariff(plan, ready);
   const snapshot = useRef({ plan, ops });
   snapshot.current = { plan, ops };
   useEffect(() => {
@@ -241,7 +262,7 @@ export default function Dashboard() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(PLAN_KEY);
-      if (raw) setPlan(validatePlan(JSON.parse(raw)));
+      if (raw) setPlan(migrateOfficeTariff(validatePlan(JSON.parse(raw))));
       const saved = localStorage.getItem(OPS_KEY);
       if (saved) setOps(validateOperations(JSON.parse(saved)));
     } catch {
@@ -251,6 +272,7 @@ export default function Dashboard() {
   }, []);
   useEffect(() => {
     const observe = new ResizeObserver(([e]) =>
+      e.contentRect.width > 0 && e.contentRect.height > 0 &&
       setSize({ w: e.contentRect.width, h: e.contentRect.height }),
     );
     if (svg.current) observe.observe(svg.current);
@@ -280,7 +302,10 @@ export default function Dashboard() {
       (e) =>
         (business === 'all' || e.business === business) &&
         (status === 'all' || e.status === status) &&
-        (!query || `${e.name} ${e.tenant}`.includes(query)),
+        (!query.trim() || `${e.name} ${e.tenant}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
+        (tab !== 'overview' || areaFilter === 'all' || (areaFilter === 'unpaid'
+          ? (balance(ops.bills.find((b) => b.spaceId === e.id && b.month === month) || blankBill(e.id, month)) ?? 0) > 0
+          : e.status === areaFilter)),
     ),
     ids = new Set(visible.map((e) => e.id));
   const summary = monthly(ops, plan, month),
@@ -308,15 +333,17 @@ export default function Dashboard() {
       summary.rentDue,
       summary.waterDue,
       summary.powerDue,
+      summary.propertyDue,
     ]),
     totalPaid = sumKnown([
       summary.rentPaid,
       summary.waterPaid,
       summary.powerPaid,
+      summary.propertyPaid,
     ]);
-  function fit() {
-    if (!plan.elements.length) return;
-    const points = plan.elements.flatMap((e) => {
+  function fit(targets = plan.elements) {
+    if (!targets.length) return;
+    const points = targets.flatMap((e) => {
       const a = (e.rotation * Math.PI) / 180;
       return [
         [0, 0],
@@ -334,14 +361,14 @@ export default function Dashboard() {
       y1 = Math.max(...points.map((p) => p.y));
     const s = Math.max(
       0.01,
-      Math.min((size.w - 65) / (x1 - x0 || 1), (size.h - 90) / (y1 - y0 || 1)),
+      Math.min((size.w - 65) / (targets.length === 1 ? Math.max((x1 - x0) * 3, 60) : x1 - x0 || 1), (size.h - 90) / (targets.length === 1 ? Math.max((y1 - y0) * 3, 45) : y1 - y0 || 1)),
     );
     setScale(s);
     setOrigin({ x: (x0 + x1 - size.w / s) / 2, y: (y0 + y1 - size.h / s) / 2 });
   }
   useEffect(() => {
-    if (ready) fit();
-  }, [ready, plan, size.w, size.h]);
+    if (ready) fit(item ? [item] : plan.elements);
+  }, [ready, plan, size.w, size.h, selected]);
   function zoom(f: number, px = size.w / 2, py = size.h / 2) {
     const next = Math.max(0.01, Math.min(100, scale * f));
     setOrigin({
@@ -376,19 +403,102 @@ export default function Dashboard() {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, []);
+  useEffect(() => {
+    const reload = () => {
+      try { const raw = localStorage.getItem(PLAN_KEY); if (raw) setPlan(validatePlan(JSON.parse(raw))); } catch { /* Keep the current valid plan. */ }
+    };
+    window.addEventListener('focus', reload);
+    window.addEventListener('storage', reload);
+    return () => { window.removeEventListener('focus', reload); window.removeEventListener('storage', reload); };
+  }, []);
+  const billSpace = spaces.find((space) => space.id === bill.spaceId);
+  const automaticPower = billSpace?.name.trim() === '研发办公室';
+  useEffect(() => {
+    setMeterBillMessage('');
+    if (!billOpen || billCategory !== 'power' || billSpace?.name.trim() !== '研发办公室') return;
+    const saved = ops.bills.find((entry) => entry.spaceId === bill.spaceId && entry.month === bill.month);
+    if (bill.month !== dateLocal().slice(0, 7)) {
+      setMeterBillMessage('历史账单保留原记录，不使用今天的读数重新计算。'); return;
+    }
+    let active = true;
+    setMeterBillLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch('/api/meter', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomName: '研发办公室', pricePerKwh: billSpace.electricityRate }) });
+        const meter = await response.json() as { address: string; warning?: string; readings: {at: string; kwh: number}[];
+          billing?: { startKwh: number; tariffs: Tariff[]; amount: number | null; warning?: string }; error?: string };
+        if (!response.ok || !meter.billing || meter.billing.amount === null || meter.warning || meter.billing.warning) throw Error(meter.error || '电表数据暂不可用，请核对读数后填写。');
+        const latest = meter.readings[meter.readings.length - 1];
+        const otherBills = ops.bills.filter((entry) => !(entry.spaceId === bill.spaceId && entry.month === bill.month));
+        const recorded = otherBills.filter((entry) => entry.powerMeter?.address === meter.address);
+        if (otherBills.some((entry) => entry.spaceId === bill.spaceId && !entry.powerMeter && ((entry.powerDue ?? 0) > 0 || (entry.powerUsage ?? 0) > 0))) throw Error('历史电费缺少结算读数，自动计费暂不可用；现有金额保持不变。');
+        if (saved?.powerMeter && recorded.some((entry) => entry.powerMeter!.startKwh >= saved.powerMeter!.endKwh)) {
+          if (active) setMeterBillMessage('后续已有电表账单，这笔账单保留原读数和费用。'); return;
+        }
+        const start = saved?.powerMeter?.startKwh ?? Math.max(meter.billing.startKwh, ...recorded.map((entry) => entry.powerMeter!.endKwh));
+        if (!latest || latest.kwh < start) throw Error('当前读数低于已记账读数，请核对电表。');
+        const startCharge = calculateMeterCharge(start, meter.billing.tariffs);
+        if (startCharge === null) throw Error('电价分段记录无效');
+        const usage = Math.round((latest.kwh - start) * 1000) / 1000;
+        const amount = Math.round((meter.billing.amount - startCharge) * 100) / 100;
+        if (!active) return;
+        setBill((current) => ({ ...current, powerUsage: usage, powerDue: amount,
+          powerMeter: { address: meter.address, startKwh: start, endKwh: latest.kwh, readingAt: latest.at } }));
+        setMeterBillMessage(`已自动读取 ${usage} 度，电费 ${amount.toFixed(2)} 元 · 抄表 ${latest.at}`);
+      } catch (error) { if (active) setMeterBillMessage((error as Error).message); }
+      finally { if (active) setMeterBillLoading(false); }
+    })();
+    return () => { active = false; setMeterBillLoading(false); };
+  }, [billOpen, billCategory, bill.spaceId, bill.month]);
+  useEffect(() => {
+    if (!billOpen || billCategory !== 'power') return;
+    const updated = ops.bills.find((entry) => entry.spaceId === bill.spaceId && entry.month === bill.month);
+    if (!updated?.powerMeter) return;
+    setBill((draft) => !draft.powerMeter || updated.powerMeter!.readingAt > draft.powerMeter.readingAt
+      ? { ...draft, powerDue: updated.powerDue, powerUsage: updated.powerUsage, powerMeter: updated.powerMeter }
+      : draft);
+  }, [ops, billOpen, billCategory, bill.spaceId, bill.month]);
+  const rentEnd = (() => {
+    const [year, m] = (bill.rentStartMonth || bill.month).split('-').map(Number);
+    const end = new Date(year, m - 1 + (bill.rentMonths || 1) - 1, 1);
+    return dateLocal(end).slice(0, 7);
+  })();
+  const billIssues = (['rent', 'water', 'power', 'property'] as const).flatMap((key) => {
+    const due = bill[`${key}Due`], paid = bill[`${key}Paid`];
+    const title = { rent: '房租', water: '水费', power: '电费', property: '物业费' }[key];
+    return paid !== null && (due === null || paid > due)
+      ? [`${title}：请填写应收金额，且实收不能超过应收。`] : [];
+  });
+  function discardBillDraft() {
+    const saved = ops.bills.find((entry) => entry.spaceId === bill.spaceId && entry.month === bill.month)
+      || blankBill(bill.spaceId, bill.month);
+    const changed = financialFields.some((key) => bill[key] !== saved[key])
+      || bill.notes !== saved.notes || bill.dueDate !== saved.dueDate
+      || bill.rentMonths !== saved.rentMonths || bill.rentStartMonth !== saved.rentStartMonth;
+    return !changed || window.confirm('这份账单有未保存的修改。放弃修改并继续？');
+  }
+  function closeBill() {
+    if (discardBillDraft()) setBillOpen(false);
+  }
   function openBill(
     spaceId = item?.id || rentables[0]?.id || spaces[0]?.id || '',
+    category = 'rent',
+    targetMonth = month,
   ) {
     setBill(
       structuredClone(
-        ops.bills.find((b) => b.spaceId === spaceId && b.month === month) ||
-          blankBill(spaceId, month),
+        ops.bills.find((b) => b.spaceId === spaceId && b.month === targetMonth) ||
+          blankBill(spaceId, targetMonth),
       ),
     );
     setFormError('');
+    setBillCategory(category);
+    setBillView('edit');
     setBillOpen(true);
   }
   function replaceBill(spaceId: string, m: string) {
+    if (!discardBillDraft()) return false;
     setBill(
       structuredClone(
         ops.bills.find((b) => b.spaceId === spaceId && b.month === m) ||
@@ -396,6 +506,7 @@ export default function Dashboard() {
       ),
     );
     setFormError('');
+    return true;
   }
   function submitBill(e: React.FormEvent) {
     e.preventDefault();
@@ -407,7 +518,15 @@ export default function Dashboard() {
       setFormError('至少录入一项用量或金额；0 与未录入不同');
       return;
     }
-    const next = { ...bill, updatedAt: new Date().toISOString() };
+    if (meterBillLoading) { setFormError('正在读取电表，请稍后保存'); return; }
+    if (billIssues.length) { setFormError(billIssues.join(' ')); return; }
+    const previous = ops.bills.find((entry) => entry.spaceId === bill.spaceId && entry.month === bill.month);
+    const paidBefore = previous?.powerPaid ?? 0;
+    const delta = (bill.powerPaid ?? 0) - paidBefore;
+    const receipts = [...(previous?.powerReceipts || [])];
+    if (!receipts.length && paidBefore > 0) receipts.push({ amount: paidBefore, at: previous?.updatedAt || '', kind: 'opening' as const });
+    if (delta !== 0) receipts.push({ amount: delta, at: new Date().toISOString(), kind: 'payment' as const });
+    const next = { ...bill, ...(receipts.length ? { powerReceipts: receipts } : {}), updatedAt: new Date().toISOString() };
     if (
       persist({
         ...ops,
@@ -660,15 +779,22 @@ export default function Dashboard() {
           }}
         />
       </header>
-      <main className="manager-body">
+      <main className={`manager-body module-${tab}`}>
+        <Tabs value={tab} onValueChange={(v) => { setTab(String(v)); setLarge(false); }} className="module-navigation">
+          <TabsList aria-label="运营业务导航">
+            <TabsTrigger value="overview"><Map size={17} />园区总览</TabsTrigger>
+            <TabsTrigger value="ledger"><Wallet size={17} />区域台账</TabsTrigger>
+            <TabsTrigger value="pipes"><Route size={17} />水电管线</TabsTrigger>
+            <TabsTrigger value="tenders"><BriefcaseBusiness size={17} />修缮招标</TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="manager-title">
           <div>
-            <div className="manager-eyebrow">PARK MANAGEMENT / 经营全景</div>
+            <div className="manager-eyebrow">{plan.name}</div>
             <h1>
-              {plan.name}
-              <span>管理驾驶舱</span>
+              {sections[tab].title}
             </h1>
-            <p>空间、经营与配套，在一张图上看清。</p>
+            <p>{sections[tab].description}</p>
           </div>
           <div className="manager-period">
             <label>
@@ -680,57 +806,23 @@ export default function Dashboard() {
                 onChange={(e) => e.target.value && setMonth(e.target.value)}
               />
             </label>
-            <button
+            {(tab === 'overview' || tab === 'ledger') && <button
               className="primary"
               disabled={!spaces.length}
               onClick={() => openBill()}
             >
               <Plus size={17} />
               录入月度台账
-            </button>
+            </button>}
           </div>
         </div>
         <div className="manager-data-note">
-          ● 手动台账 · 当前浏览器保存{' '}
-          <span>
-            图纸实时读取自编辑器；未录入 ≠ 0；暂无设备实时数据和多端同步。
-          </span>
+          <span className="local-status">本机保存</span>
+          <span>图纸与收款保存在本机 · 研发办公室已接入电表</span>
           {storageError && <strong>{storageError}</strong>}
+          {tariffSyncMessage && <strong role="alert">{tariffSyncMessage}</strong>}
         </div>
-        <section className="kpi-grid">
-          <KPI
-            icon={<Building2 />}
-            label="区域出租率"
-            value={occupancy === null ? '—' : `${occupancy}%`}
-            detail={`${rented} 已出租 / ${rentables.length} 可租区域 · 当前状态`}
-          />
-          <KPI
-            icon={<Wallet />}
-            label="本月应收租金"
-            value={money(summary.rentDue)}
-            detail={`实收 ${money(summary.rentPaid)} · 以月度台账为准`}
-          />
-          <KPI
-            icon={<Droplets />}
-            label="本月应收水费"
-            value={money(summary.waterDue)}
-            detail={`用量 ${number(summary.waterUsage)} m³ · 实收 ${money(summary.waterPaid)}`}
-          />
-          <KPI
-            icon={<Zap />}
-            label="本月应收电费"
-            value={money(summary.powerDue)}
-            detail={`用量 ${number(summary.powerUsage)} kWh · 实收 ${money(summary.powerPaid)}`}
-          />
-          <KPI
-            icon={<Car />}
-            label={day === dateLocal() ? '今日停车收入' : `${day} 停车收入`}
-            value={money(parkingToday?.income)}
-            detail={`${parkingToday?.vehicles == null ? '车次未录入' : `${parkingToday.vehicles} 车次`} · 点击录入日报`}
-            onClick={openParking}
-          />
-        </section>
-        <section className="manager-workspace">
+        <section className={`manager-workspace ${item ? 'has-selection' : ''}`}>
           <div className="manager-map-panel" ref={container}>
             <div className="manager-map-heading">
               <div>
@@ -755,6 +847,7 @@ export default function Dashboard() {
                 onClick={() => setLarge(!large)}
               >
                 {large ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+                {large ? '退出全屏' : '全屏看图'}
               </button>
             </div>
             <Tabs
@@ -800,12 +893,12 @@ export default function Dashboard() {
                   ),
                 ]}
               />
-              {(business !== 'all' || status !== 'all' || query) && (
+              {(business !== 'all' || status !== 'all' || query || areaFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setBusiness('all');
                     setStatus('all');
-                    setQuery('');
+                    setQuery(''); setAreaFilter('all');
                   }}
                 >
                   清除
@@ -826,6 +919,28 @@ export default function Dashboard() {
                 />
               </div>
             )}
+            <div className="area-navigation">
+              <button aria-expanded={areaListOpen} aria-controls="park-area-list" onClick={() => setAreaListOpen(!areaListOpen)}>{areaListOpen ? '收起区域列表' : '展开区域列表'}</button>
+              <div role="group" aria-label="区域快捷筛选">
+                {[['all', '全部'], ['空置', '空置'], ['已出租', '已出租'], ['unpaid', '待收款']].map(([value, label]) =>
+                  <button key={value} aria-pressed={areaFilter === value} onClick={() => { setAreaFilter(value); setStatus('all'); }}>{label}</button>)}
+              </div>
+              <span>{visible.length} 个区域{areaFilter === 'unpaid' ? ` · ${month} 已知待收大于零` : ''}</span>
+            </div>
+            <div className={`map-and-list ${areaListOpen ? 'list-open' : ''}`}>
+              {areaListOpen && <aside className="area-list" id="park-area-list" aria-label="园区区域列表">
+                <p className="area-list-hint">点击区域，地图自动定位</p>
+                {visible.map((space) => {
+                  const due = billMap.get(space.id);
+                  return <button key={space.id} aria-pressed={selected === space.id} onClick={() => { setSelected(space.id); if (selected === space.id) fit([space]); }}>
+                    <span className="area-list-name">{space.name}<ChevronRight size={15} /></span>
+                    <span className="area-list-meta">{space.status} · {space.business}</span>
+                    <span className="area-list-tenant">{space.tenant || '未设置承租方'}</span>
+                    {due && (balance(due) ?? 0) > 0 && <span className="area-list-due">待收 {money(balance(due))}</span>}
+                  </button>;
+                })}
+                {!visible.length && <p className="area-list-empty">{spaces.length ? '没有匹配区域，请调整搜索或筛选条件。' : '导入图纸后，这里会显示区域列表。'}</p>}
+              </aside>}
             <div className="manager-map-canvas">
               <svg
                 ref={svg}
@@ -1122,12 +1237,14 @@ export default function Dashboard() {
                 <button
                   title="显示完整园区"
                   aria-label="显示完整园区"
-                  onClick={fit}
+                  onClick={() => fit()}
                 >
-                  <Move size={16} />
+                  <Move size={16} />适应全图
                 </button>
+                {item && <button onClick={() => fit([item])}>定位所选区域</button>}
                 <span>拖动平移 · 滚轮缩放</span>
               </div>
+            </div>
             </div>
             <div className="map-legend">
               {view === 'business' ? (
@@ -1171,11 +1288,25 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <h3>{item.name}</h3>
+                <p className="room-tenant">{item.tenant || '尚未设置承租方'}</p>
                 <div className="detail-tags">
                   <span>{names[item.kind]}</span>
                   <span>{item.business}</span>
                   <span>{item.status}</span>
                 </div>
+                <div className="room-facts">
+                  <div><span>空间面积</span><strong>{number(item.width * item.height)}<small> m²</small></strong></div>
+                  <div><span>配置月租金</span><strong>{money(item.rent)}</strong></div>
+                </div>
+                <RoomFeeCards bills={ops.bills.filter((entry) => entry.spaceId === item.id)} month={month} onOpen={(fee, period, history) => { openBill(item.id, fee, period); if (history) setBillView('history'); }} />
+                {item.name.trim() === '研发办公室' && <details className="room-device-details"><summary><Zap size={15} />电表与抄表数据</summary>
+                <MeterPanel roomName={item.name} bills={ops.bills.filter((entry) => entry.spaceId === item.id)} onReading={(meter: MeterSnapshot) => {
+                  const current = snapshot.current.ops;
+                  const next = syncMeterLedger(current, item.id, meter, dateLocal().slice(0, 7));
+                  if (next !== current) persist(next);
+                }} />
+                </details>}
+                <details className="room-more"><summary>房间资料与配套</summary>
                 <dl>
                   <dt>承租方</dt>
                   <dd>{item.tenant || '未设置'}</dd>
@@ -1193,20 +1324,11 @@ export default function Dashboard() {
                     {item.waterRate} 元/m³ · {item.electricityRate} 元/kWh
                   </dd>
                 </dl>
-                <div className="selected-billing">
-                  <span>{month} 已知待收金额</span>
-                  <strong>
-                    {itemBill ? money(balance(itemBill)) : '未录入'}
-                  </strong>
-                  <small>仅计算同时填写应收、实收的费用项</small>
+                </details>
+                <div className="room-actions">
+                  <button className="primary" onClick={() => openBill(item.id)}><Wallet size={16} />记收款 / 编辑账单</button>
+                  <button onClick={() => { openBill(item.id); setBillView('history'); }}><Clock3 size={16} />历史记录</button>
                 </div>
-                <button className="primary" onClick={() => openBill(item.id)}>
-                  <Plus size={15} />
-                  录入 / 编辑本月账单
-                </button>
-                <p className="tiny">
-                  名称、业态、出租状态在图纸编辑器维护。面积为绘图计算值。
-                </p>
               </section>
             ) : (
               <section className="insight-card receipt-card">
@@ -1215,7 +1337,7 @@ export default function Dashboard() {
                   <span>{month}</span>
                 </div>
                 <strong>{money(totalPaid)}</strong>
-                <p>已收租金 + 水费 + 电费</p>
+                <p>已收房租、水电及物业费</p>
                 <div className="receipt-track">
                   <i
                     style={{
@@ -1298,18 +1420,50 @@ export default function Dashboard() {
             </section>
           </aside>
         </section>
+        <section className="kpi-grid">
+          <KPI
+            icon={<Building2 />}
+            label="区域出租率"
+            value={occupancy === null ? '—' : `${occupancy}%`}
+            detail={`${rented} 已出租 / ${rentables.length} 可租区域 · 当前状态`}
+          />
+          <KPI
+            icon={<Wallet />}
+            label="本账期应收租金"
+            value={money(summary.rentDue)}
+            detail={`实收 ${money(summary.rentPaid)} · 以月度台账为准`}
+          />
+          <KPI
+            icon={<Droplets />}
+            label="本月应收水费"
+            value={money(summary.waterDue)}
+            detail={`用量 ${number(summary.waterUsage)} m³ · 实收 ${money(summary.waterPaid)}`}
+          />
+          <KPI
+            icon={<Zap />}
+            label="本月应收电费"
+            value={money(summary.powerDue)}
+            detail={`用量 ${number(summary.powerUsage)} kWh · 实收 ${money(summary.powerPaid)}`}
+          />
+          <KPI
+            icon={<Car />}
+            label={day === dateLocal() ? '今日停车收入' : `${day} 停车收入`}
+            value={money(parkingToday?.income)}
+            detail={`${parkingToday?.vehicles == null ? '车次未录入' : `${parkingToday.vehicles} 车次`} · 点击录入日报`}
+            onClick={openParking}
+          />
+        </section>
         <section className="manager-bottom">
-          <div className="bottom-tabs">
-            <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-              <TabsList>
-                <TabsTrigger value="overview">经营分析</TabsTrigger>
-                <TabsTrigger value="ledger">区域台账</TabsTrigger>
-                <TabsTrigger value="pipes">管线清单</TabsTrigger>
-                <TabsTrigger value="tenders">修缮招标</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <span>指标按全园区统计，地图筛选仅影响地图与台账列表。</span>
-          </div>
+          {(tab === 'overview' || tab === 'ledger') && <div className="section-heading">
+            <h2>{tab === 'overview' ? '经营分析' : '本月账单'}</h2>
+            <span>{tab === 'ledger' ? `${month} · ${visible.length} 个区域 · 未录入的金额不计为零` : tab === 'overview' ? '按所选账期汇总全园区已录入数据' : '园区设施与维护'}</span>
+          </div>}
+          {tab === 'ledger' && <div className="ledger-filters">
+            <input aria-label="搜索台账区域或承租方" placeholder="搜索区域名称或承租方" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Choice label="台账业态" value={business} onChange={setBusiness} options={[["all", "全部业态"], ...businesses.map((v) => [v, v] as [string, string])]} />
+            <Choice label="台账出租状态" value={status} onChange={setStatus} options={[["all", "全部状态"], ...Array.from(new Set(spaces.map((e) => e.status))).map((v) => [v, v] as [string, string])]} />
+            {(query || business !== 'all' || status !== 'all') && <button onClick={() => { setQuery(''); setAreaFilter('all'); setBusiness('all'); setStatus('all'); }}>清除筛选</button>}
+          </div>}
           {tab === 'overview' ? (
             <div className="analytics-grid">
               <section className="insight-card">
@@ -1449,6 +1603,7 @@ export default function Dashboard() {
                       '租金应收 / 实收',
                       '水费应收 / 实收',
                       '电费应收 / 实收',
+                      '物业费应收 / 实收',
                       '已知待收',
                       '截止日',
                       '操作',
@@ -1465,11 +1620,12 @@ export default function Dashboard() {
                         <TableCell>
                           <button
                             className="table-link"
-                            onClick={() => setSelected(e.id)}
+                            onClick={() => { setSelected(e.id); setTab('overview'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                           >
                             {e.name}
                           </button>
                           <small>{e.tenant || '承租方未设置'}</small>
+                          {b?.rentMonths === 12 && <small>年付租金 · {b.rentStartMonth || b.month} 起 12 个月</small>}
                         </TableCell>
                         <TableCell>{e.business}</TableCell>
                         <TableCell>{e.status}</TableCell>
@@ -1482,6 +1638,7 @@ export default function Dashboard() {
                         <TableCell>
                           {money(b?.powerDue)} / {money(b?.powerPaid)}
                         </TableCell>
+                        <TableCell>{money(b?.propertyDue)} / {money(b?.propertyPaid)}</TableCell>
                         <TableCell>
                           {b ? money(balance(b)) : '未录入'}
                         </TableCell>
@@ -1497,13 +1654,16 @@ export default function Dashboard() {
                 </TableBody>
               </Table>
               {!visible.length && (
-                <p className="manager-empty-text">没有符合筛选条件的区域</p>
+                <div className="manager-empty-text">
+                  <p>{spaces.length ? '没有符合筛选条件的区域，请调整搜索或清除筛选。' : '还没有园区图纸，导入后即可按区域录入台账。'}</p>
+                  {!spaces.length && <button onClick={() => file.current?.click()}><Upload size={15} />导入图纸 / 备份</button>}
+                </div>
               )}
             </div>
           ) : tab === 'pipes' ? (
             <section className="pipe-list">
               <p>
-                管线在「图纸编辑器」中绘制；接入状态来自图纸属性，两者独立维护。
+                管线在图纸编辑器中绘制，接入状态在区域属性中维护。 <a className="table-link" href="/">前往图纸编辑器 →</a>
               </p>
               {ops.pipes.map((p) => (
                 <div key={p.id}>
@@ -1596,16 +1756,19 @@ export default function Dashboard() {
           {notice}
         </div>
       )}
-      <Dialog open={billOpen} onOpenChange={setBillOpen}>
-        <DialogContent className="manager-dialog">
+      <Dialog open={billOpen} onOpenChange={(open) => open ? setBillOpen(true) : closeBill()}>
+        <DialogContent className="manager-dialog bill-dialog">
           <DialogHeader>
-            <DialogTitle>录入月度台账</DialogTitle>
+            <DialogTitle>{billSpace?.name || '区域'} · 费用账单</DialogTitle>
             <DialogDescription>
-              留空表示未录入，0
-              表示确认为零。应收与实收分开填写；保存会更新该区域该月份的账单。
+              选择费用，填写该收多少、已经收到多少。留空表示暂未记录。
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitBill}>
+          <Tabs className="bill-page-tabs" value={billView} onValueChange={(value) => setBillView(String(value))}>
+            <TabsList aria-label="账单操作"><TabsTrigger value="edit">录入 / 编辑</TabsTrigger><TabsTrigger value="history"><Clock3 size={16} />历史记录</TabsTrigger></TabsList>
+          </Tabs>
+          {billView === 'history' && <BillHistory initialCategory={billCategory} key={`${bill.spaceId}-${billCategory}`} roomName={billSpace?.name || ''} bills={ops.bills.filter((entry) => entry.spaceId === bill.spaceId)} onOpen={(m) => { if (replaceBill(bill.spaceId, m)) setBillView('edit'); }} />}
+          <form onSubmit={submitBill} hidden={billView !== 'edit'}>
             <div className="form-pair">
               <label>
                 区域
@@ -1628,34 +1791,90 @@ export default function Dashboard() {
                 />
               </label>
             </div>
-            <div className="bill-groups">
+            <div className="bill-context">
+              <span>承租方 <b>{billSpace?.tenant || '未设置'}</b></span>
+              <span>{ops.bills.some((entry) => entry.spaceId === bill.spaceId && entry.month === bill.month) ? '编辑已有账单' : '新建本月账单'}</span>
+            </div>
+            <Tabs className="bill-category-tabs" value={billCategory} onValueChange={(value) => { setBillCategory(String(value)); setFormError(''); }}>
+              <TabsList aria-label="选择要处理的费用">
+                <TabsTrigger value="rent"><Building2 size={17} />租金</TabsTrigger>
+                <TabsTrigger value="water"><Droplets size={17} />水费</TabsTrigger>
+                <TabsTrigger value="power"><Zap size={17} />电费</TabsTrigger>
+                <TabsTrigger value="property"><Building2 size={17} />物业费</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="bill-groups bill-simple">
               {[
                 ['rent', '租金', ''],
                 ['water', '水费', 'm³'],
                 ['power', '电费', 'kWh'],
-              ].map(([key, title, unit]) => (
+                ['property', '物业费', ''],
+              ].filter(([key]) => key === billCategory).map(([key, title, unit]) => (
                 <section key={key}>
-                  <h3>{title}</h3>
+                  <h3>{key === 'rent' ? <Building2 size={18} /> : key === 'water' ? <Droplets size={18} /> : <Zap size={18} />}{title}</h3>
+                  {key === 'power' && <p className="bill-source-note" role="status">{meterBillLoading ? '正在自动读取电表费用…' : meterBillMessage || (bill.powerMeter ? `用电 ${bill.powerUsage} 度 · 抄表 ${bill.powerMeter.readingAt}` : '等待电表数据')}</p>}
+                  {key === 'rent' && <p className="bill-source-note">{bill.rentMonths === 12 ? '年付' : '月付'} · {bill.rentStartMonth || bill.month} 至 {rentEnd}</p>}
+                  {[
+                    ['Due', key === 'power' && automaticPower ? (bill.powerMeter ? '电表自动计算（元）' : '原账单金额（自动读取后更新）') : '该收多少（元）'],
+                    ['Paid', '已经收到（元）'],
+                  ].map(([suffix, label]) => (
+                    <label key={suffix}>
+                      {label}
+                      <input
+                        type="number"
+                        min="0"
+                        max="1000000000000"
+                        step=".01"
+                        readOnly={key === 'power' && suffix === 'Due' && automaticPower}
+                        aria-label={`${title}${label}`}
+                        placeholder="未录入"
+                        value={bill[`${key}${suffix}` as FinancialField] ?? ''}
+                        onChange={(e) =>
+                          setBill((b) => ({
+                            ...b,
+                            [`${key}${suffix}`]:
+                              e.target.value === ''
+                                ? null
+                                : Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                  <div className="bill-payment-shortcuts">
+                    <button type="button" onClick={() => setBill((current) => ({ ...current, [`${key}Paid`]: 0 }))}>还没收到</button>
+                    <button type="button" disabled={bill[`${key}Due` as FinancialField] === null} onClick={() => setBill((current) => ({ ...current, [`${key}Paid`]: current[`${key}Due` as FinancialField] }))}>已全额收到</button>
+                  </div>
+                  <div className="bill-current-balance">这项还需收 <strong>{bill[`${key}Due` as FinancialField] === null || bill[`${key}Paid` as FinancialField] === null ? '待填写' : money(Math.max(0, bill[`${key}Due` as FinancialField]! - bill[`${key}Paid` as FinancialField]!))}</strong></div>
+                  {key !== 'property' && !(key === 'power' && automaticPower) && <details className="bill-calculation" key={`${key}-${bill.spaceId}-${bill.month}`}>
+                    <summary>{key === 'rent' ? `租期与金额设置 · ${bill.rentMonths === 12 ? '年付' : '月付'}` : '查看用量、单价与计算方式'}</summary>
+                  <p className="bill-rate">{key === 'rent' ? `配置月租金 ${money(billSpace?.rent)}` : `配置单价 ${number(key === 'water' ? billSpace?.waterRate : billSpace?.electricityRate)} 元/${unit}`}</p>
                   {key === 'rent' ? (
+                    <>
+                    <label>租金付款周期<Choice label="租金付款周期" value={String(bill.rentMonths || 1)} onChange={(value) => setBill((current) => ({ ...current, rentMonths: Number(value) as 1 | 12, rentStartMonth: current.rentStartMonth || current.month, rentDue: Math.round((billSpace?.rent || 0) * Number(value) * 100) / 100 }))} options={[["1", "月付"], ["12", "年付"]]} /></label>
+                    <label>租金起始月份<input type="month" value={bill.rentStartMonth || bill.month} onChange={(e) => e.target.value && setBill({ ...bill, rentStartMonth: e.target.value })} /></label>
+                    <p className="bill-rate">覆盖至 {rentEnd}（含） · 合计 {bill.rentMonths || 1} 个月</p>
                     <button
                       type="button"
                       onClick={() =>
                         setBill((b) => ({
                           ...b,
                           rentDue:
-                            spaces.find((s) => s.id === b.spaceId)?.rent ??
-                            null,
+                            Math.round((spaces.find((s) => s.id === b.spaceId)?.rent || 0) * (b.rentMonths || 1) * 100) / 100,
                         }))
                       }
                     >
-                      带入配置月租金
+                      带入{bill.rentMonths === 12 ? '全年租金（月租 × 12）' : '配置月租金'}
                     </button>
+                    <p className="bill-rate">应收可按合同修改。全年金额计入本账期，不自动拆成 12 笔。</p>
+                    </>
                   ) : (
                     <>
                       <label>
-                        本月用量（{unit}）
+                        本次记账用量（{unit}，非累计读数）
                         <input
                           type="number"
+                          readOnly={key === 'power' && !!bill.powerMeter}
                           min="0"
                           max="1000000000000"
                           step="any"
@@ -1663,16 +1882,15 @@ export default function Dashboard() {
                           onChange={(e) =>
                             setBill((b) => ({
                               ...b,
-                              [`${key}Usage`]:
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value),
+                              [`${key}Usage`]: e.target.value === '' ? null : Number(e.target.value),
+                              [`${key}Due`]: e.target.value === '' ? null : Math.round(Number(e.target.value) * (key === 'water' ? billSpace?.waterRate || 0 : billSpace?.electricityRate || 0) * 100) / 100,
                             }))
                           }
                         />
                       </label>
                       <button
                         type="button"
+                        disabled={key === 'power' && !!bill.powerMeter}
                         onClick={() => {
                           const s = spaces.find((s) => s.id === bill.spaceId),
                             usage = bill[`${key}Usage` as FinancialField];
@@ -1699,33 +1917,13 @@ export default function Dashboard() {
                       </button>
                     </>
                   )}
-                  {[
-                    ['Due', '应收（元）'],
-                    ['Paid', '实收（元）'],
-                  ].map(([suffix, label]) => (
-                    <label key={suffix}>
-                      {label}
-                      <input
-                        type="number"
-                        min="0"
-                        max="1000000000000"
-                        step=".01"
-                        value={bill[`${key}${suffix}` as FinancialField] ?? ''}
-                        onChange={(e) =>
-                          setBill((b) => ({
-                            ...b,
-                            [`${key}${suffix}`]:
-                              e.target.value === ''
-                                ? null
-                                : Number(e.target.value),
-                          }))
-                        }
-                      />
-                    </label>
-                  ))}
+
+                  {key === 'power' && <p className="bill-rate" role="status">{meterBillLoading ? '正在同步电价并读取电表…' : meterBillMessage}</p>}
+                  </details>}
                 </section>
               ))}
             </div>
+            <details className="bill-extra"><summary>缴费截止日与备注{bill.dueDate ? ` · ${bill.dueDate}` : '（选填）'}</summary>
             <div className="form-pair">
               <label>
                 缴费截止日
@@ -1746,18 +1944,23 @@ export default function Dashboard() {
                 />
               </label>
             </div>
+            </details>
             {formError && (
               <p className="form-error" role="alert">
                 {formError}
               </p>
             )}
+            <div className="bill-save-summary" aria-live="polite">
+              本账单合计：该收 {money(sumKnown([bill.rentDue, bill.waterDue, bill.powerDue, bill.propertyDue]))} · 已收 {money(sumKnown([bill.rentPaid, bill.waterPaid, bill.powerPaid, bill.propertyPaid]))}
+              {billIssues.map((issue) => <p className="form-error" key={issue}>{issue}</p>)}
+            </div>
             <div className="dialog-actions">
-              <button type="button" onClick={() => setBillOpen(false)}>
+              <button type="button" onClick={closeBill}>
                 取消
               </button>
               <button className="primary" type="submit">
                 <Save size={16} />
-                保存台账
+                保存账单
               </button>
             </div>
           </form>
